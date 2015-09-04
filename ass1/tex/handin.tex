@@ -1,0 +1,45 @@
+\documentclass[a4paper,10pt]{article}
+\usepackage[a4paper, total={210mm,297mm}, left=20mm, right=20mm, top=20mm, bottom=20mm]{geometry}
+\usepackage[utf8]{inputenc}
+
+%opening
+\title{Assignment 1  \\Programming Massively Parallel Hardware }
+\author{Mads Thoudahl /qmh332}
+
+\begin{document}
+
+\maketitle
+
+\section{Task 1}
+
+\section{Task 2}
+
+\section{Task 3}
+
+\section{Task 4 - CUDA exercise}
+
+The code is implemented in the attached zip file under the \texttt{cuda} directory as \texttt{ass1.cu} and with a makefile as described.
+It has some global variables like number of threads and whether to time memory transfers set in define clauses in the file.
+
+\subsection{timings}
+
+\begin{table}[ht]
+\caption{timings - avg of 3 runs all on gpu01 at diku server}
+\centering
+\begin{tabular}{c|c|c}
+ 800.000 calcs & GPU & CPU \\
+\hline with MEM & 3.11 ms & 3.19 ms\\
+\hline without MEM & 0.165 ms & 3.26 ms
+\end{tabular}
+\end{table}
+All calculations are within a fault tolerance (EPSILON) of 0.0005.
+It seems that with the current calculations, around 14200 calculations make it break even. 
+But if you do count the memory transfers in, it barely break even at 800.000 calculations.
+There is a define statement in the code to switch timing of memory transfers.
+
+
+
+
+
+
+\end{document}
