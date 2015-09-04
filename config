@@ -1,0 +1,3 @@
+Host gpu01-diku-apl
+ProxyCommand ssh -q qmh332@ssh-diku-apl.science.ku.dk nc -q0 gpu01-diku-apl 22
+user qmh332
