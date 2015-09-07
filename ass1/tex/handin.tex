@@ -1,6 +1,7 @@
 \documentclass[a4paper,10pt]{article}
 \usepackage[a4paper, total={210mm,297mm}, left=20mm, right=20mm, top=20mm, bottom=20mm]{geometry}
 \usepackage[utf8]{inputenc}
+\usepackage{amsmath}
 
 %opening
 \title{Assignment 1  \\Programming Massively Parallel Hardware }
@@ -10,13 +11,39 @@
 
 \maketitle
 
-\section{Task 1}
+\section{Task 1 - Proof}
+Proving the equality of the equation:
+\begin{align}
+  &  redomap (\odot) f e_{\odot} \\
+  =& (redomap (\odot) e_{\odot}) . (map f ) \\
+   & id = (reduce (++) []) . distr_p \\
+  \underset{LHI2}{=}& (reduce (\odot) e_{\odot}) . (reduce (++) []) . ( map (map f )).distr_p \\
+  \underset{LHI3}{=}& (reduce (\odot) e_{\odot}) . ((map) reduce (\odot)  e_{\odot})) . distr_{p}
+\end{align}
 
-\section{Task 2}
+\section{Task 2 - Longest Satisfying Segment Problem }
+The assignment had to be extended to work as supposed, as \texttt{firstx} always took the value 0 thereby making the neutral element nonneutral...
+The newvalues are all dependent on the fact that the two sublists are connected.
+\begin{verbatim}
+lssop (lssx, lisx, lcsx, tlx, firstx, lastx, okx)
+(lssy, lisy, lcsy, tly, firsty, lasty, oky) =
+  (newlss, newlis, newlcs, tlx+tly, fx, ly, newok)
+    connect = if (tlx==0 || tly==0) then True else p [lastx,firsty]
+    newlss  = lssx `max` lssy `max` (if connect then (lcsx + lisy) else 0)
+    newlis  = if (okx && connect) then (tlx + lisy) else lisx
+    newlcs  = if (oky && connect) then (tly + lcsx) else lcsy
+    newok   = okx && oky && connect
+    fx      = if (tlx==0) then firsty else firstx
+    ly      = if (tly==0) then lastx else lasty
+\end{verbatim}
+This code fulfills its purposes in my simple test-cases.
+
 
 \section{Task 3}
 
-\section{Task 4 - CUDA exercise}
+
+
+\section{Task 4 - CUDA programming}
 
 The code is implemented in the attached zip file under the \texttt{cuda} directory as \texttt{ass1.cu} and with a makefile as described.
 It has some global variables like number of threads and whether to time memory transfers set in define clauses in the file.
