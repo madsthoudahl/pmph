@@ -205,75 +205,35 @@ flatQuicksort ne sizes arr =
 -----------------------------------------------------
 segmSpecialFilter :: (a->Bool) -> [Int] -> [a] -> ([Int],[a])
 segmSpecialFilter cond sizes arr =
-    ------------------------------------------------
-    --- Implementation is Bogus, write your own! ---
-    ------------------------------------------------
-    if null arr then (sizes,arr) else
-    (replicate (length arr) 1, replicate (length arr) (head arr))
-
------------------------------------------------------
---- ASSIGNMENT 1: implement sparse matrix-vector  ---
----    TASK 4a.   multiplication with nested      ---
----               parallelism \& test it!         ---
----               Matrix:                         ---
----              [ 2.0, -1.0,  0.0, 0.0]          ---
----              [-1.0,  2.0, -1.0, 0.0]          ---
----              [ 0.0, -1.0,  2.0,-1.0]          ---
----              [ 0.0,  0.0, -1.0, 2.0]          ---
----                                               ---
----              IS REPRESENTED AS a list of lists---
----                in which the outer list has the---
----                same number of elements as the ---
----                number of rows of the matrix.  ---
----                However, each row is represented--
----                as a sparse list that pairs up ---
----                each non-zero element with its ---
----                column index, as below:        ---
----                                               ---
----              [ [(0,2.0),  (1,-1.0)],          ---
----                [(0,-1.0), (1, 2.0), (2,-1.0)],---
----                [(1,-1.0), (2, 2.0), (3,-1.0)],---
----                [(2,-1.0), (3, 2.0)]           ---
----              ]                                ---
----               The vector is full and matches  ---
----               the matrix number of columns,   ---
----               e.g., x = [2.0, 1.0, 0.0, 3.0]  ---
----                     (transposed)              ---
----    ALSO LOOK WHERE IT IS FUNCTION IS CALLED   ---
------------------------------------------------------
-
-nestSparseMatVctMult :: [[(Int,Double)]] -> [Double] -> [Double]
-nestSparseMatVctMult mat x =
-    map (\row -> let (inds,vals) = unzip row
-                     yi = 0.0 -- implement who yi should be!
-                 in  yi
-            ----------------------------------------------
-            --- Pseudocode:                            ---
-            ---   yi := 0;                             ---
-            ---   for(j = 0; j < length inds; j++)     ---
-            ---       yi := yi + vals[j] * x[ inds[j] ]---
-            ----------------------------------------------
-        ) mat
+    --flag [3,0,0,4,0,0,0]  arr [3,2,1,2,3,4,5]]
+    let n          = length arr
+        isflag     = map (\x -> if x==0 then 0 else 1) sizes
+	condtest   = map cond arr            -- [T,F,T,F,T,F,T]
+	istrue     = map (\b -> if b==True then 1 else 0) condtest
+                                             -- [1,0,1,0,1,0,1]
+	isfalse    = map (\b -> if b==True then 0 else 1) condtest
+                                             -- [0,1,0,1,0,1,0]
+        idxs       = scanExc (+) 0 flag      -- [0,3,3,3,7,7,7]
+        idxoffset  = zipWith (*) isflag idxs -- [0,0,0,3,0,0,0]
+        idxoffsets = scanInc (+) 0 idxoffset -- [0,0,0,3,3,3,3] 
+        prevlocidx = zipWith (-) (reduce (++) [] (map (\f -> [1..f]) flag)) (replicate n 1)
+                                             -- [0,1,2,0,1,2,3]
+        -- goal : flag [3,0,0,4,0,0,0] countflags [2,0,1,2,0,2,0] filteredelms [3,1,2,3,5,2,4]
+    in  (isflag, arr) 
 
 
------------------------------------------------------------
---- ASSIGNMENT 1: implement sparse matrix-vector        ---
----    TASK 4b.   multiplication with flat parallelism! ---
----               Same matrix as before has a flat      ---
----               representation: flag vector (flags) & ---
----                               data vector (mat  )   ---
----    ALSO LOOK WHERE IT IS FUNCTION IS CALLED   ---
------------------------------------------------------------
 
-flatSparseMatVctMult :: [Int] -> [(Int,Double)] -> [Double] -> [Double]
-flatSparseMatVctMult flags mat x =
-    let tot_num_elems = length flags
-        vct_len       = length x
-        --------------------------------
-        --- Implementation Here      ---
-        --- Figure it out!           ---
-        --------------------------------
-    in  x
+
+
+
+
+
+
+
+
+
+
+
 
 ----------------------------------------
 --- MAIN                             ---
@@ -313,5 +273,5 @@ main = do args <- getArgs
           putStrLn ("NestQuicksort inp: " ++ show (nestedQuicksort inp))
           putStrLn ("FlatQuicksort inp: " ++ show (flatQuicksort 0 (8:(replicate 7 0)) inp))
 
-          putStrLn ("Nested SparseMatrixMult: " ++ show (nestSparseMatVctMult matrix_nest x_vector))
-          putStrLn ("Flat   SparseMatrixMult: " ++ show (flatSparseMatVctMult matrix_flag matrix_flat x_vector))
+--          putStrLn ("Nested SparseMatrixMult: " ++ show (nestSparseMatVctMult matrix_nest x_vector))
+--          putStrLn ("Flat   SparseMatrixMult: " ++ show (flatSparseMatVctMult matrix_flag matrix_flat x_vector))
