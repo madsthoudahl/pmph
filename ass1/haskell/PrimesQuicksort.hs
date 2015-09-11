@@ -205,21 +205,30 @@ flatQuicksort ne sizes arr =
 -----------------------------------------------------
 segmSpecialFilter :: (a->Bool) -> [Int] -> [a] -> ([Int],[a])
 segmSpecialFilter cond sizes arr =
-    --flag [3,0,0,4,0,0,0]  arr [3,2,1,2,3,4,5]]
+    --sizes [3,0,0,4,0,0,0]  arr [3,2,1,2,3,4,5]]
     let n          = length arr
-        isflag     = map (\x -> if x==0 then 0 else 1) sizes
+        isflag     = map (\x -> if x==0 then 0::Int else 1::Int) sizes
+                                             -- [1,0,0,1,0,0,0]
 	condtest   = map cond arr            -- [T,F,T,F,T,F,T]
-	istrue     = map (\b -> if b==True then 1 else 0) condtest
+	istrue     = map (\b -> if b==True then 1::Int else 0::Int) condtest
                                              -- [1,0,1,0,1,0,1]
-	isfalse    = map (\b -> if b==True then 0 else 1) condtest
+	isfalse    = map (\b -> if b==True then 0::Int else 1::Int) condtest
                                              -- [0,1,0,1,0,1,0]
-        idxs       = scanExc (+) 0 flag      -- [0,3,3,3,7,7,7]
+        segtrueacc = segmScanInc (+) 0 sizes istrue  
+                                             -- [1,1,2,0,1,1,2]
+        -- segTrues   = segmReduce (max) 0 sizes segtrueacc
+                                             -- [2,2]
+
+        idxs       = scanExc (+) 0 sizes     -- [0,3,3,3,7,7,7]
         idxoffset  = zipWith (*) isflag idxs -- [0,0,0,3,0,0,0]
         idxoffsets = scanInc (+) 0 idxoffset -- [0,0,0,3,3,3,3] 
-        prevlocidx = zipWith (-) (reduce (++) [] (map (\f -> [1..f]) flag)) (replicate n 1)
+        prevlocidx = zipWith (-) (reduce (++) [] (map (\f -> [1..f]) sizes)) (replicate n 1)
                                              -- [0,1,2,0,1,2,3]
+        localidx   = replicate n 0  -- bogus!
         -- goal : flag [3,0,0,4,0,0,0] countflags [2,0,1,2,0,2,0] filteredelms [3,1,2,3,5,2,4]
-    in  (isflag, arr) 
+        newidx     = zipWith (+) idxoffsets localidx
+        newelm     = permute newidx arr 
+    in  (isflag, newelm) 
 
 
 

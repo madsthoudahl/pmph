@@ -22,8 +22,6 @@ Proving the equality of the equation:
   \underset{LHI3}{=}& (reduce (\odot) e_{\odot}) . ((map) reduce (\odot)  e_{\odot})) . distr_{p}
 \end{align}
 
-\vfill
-
 \section{Task 2 - Longest Satisfying Segment Problem }
 The assignment had to be extended to work as supposed, as \texttt{firstx} always took the value 0 thereby making the neutral element nonneutral...
 The newvalues are all dependent on the fact that the two sublists are connected.
@@ -40,9 +38,7 @@ lssop (lssx, lisx, lcsx, tlx, firstx, lastx, okx)
     ly      = if (tly==0) then lastx else lasty
 \end{verbatim}
 This code fulfills its purposes in my simple test-cases.
-\vfill
 
-\newpage
 
 \section{Task 3}
 This task has proven to be very hard indeed.
@@ -50,8 +46,7 @@ I have been unsuccesful in solving the task, but i have included some code to tr
 
 
 My idea was to zip up the data values along with the indices they should be moved to, thus calculating their offset (did that in \texttt{idxoffsets}) and their local index...
-the local idx are in my head some iota from [0..predicate trues], and from [predicate falses-n..n], but i cannot figure out how to calculate those local indices.
-
+the local idx are in my head some iota from 0
 \begin{verbatim}
 segmSpecialFilter :: (a->Bool) -> [Int] -> [a] -> ([Int],[a])
 segmSpecialFilter cond sizes arr =
@@ -74,17 +69,13 @@ segmSpecialFilter cond sizes arr =
         idxoffsets = scanInc (+) 0 idxoffset -- [0,0,0,3,3,3,3]
         prevlocidx = zipWith (-) (reduce (++) [] (map (\f -> [1..f]) flag)) (replicate n 1)
                                              -- [0,1,2,0,1,2,3]
-        localidx   = replicate n 0  -- bogus!
         -- goal : flag [3,0,0,4,0,0,0] countflags [2,0,1,2,0,2,0] filteredelms [3,1,2,3,5,2,4]
-        newidx     = zipWith (+) idxoffsets localidx
-        newelm     = permute newidx arr
-    in  (isflag, newelm)
+    in  (isflag, arr)
 \end{verbatim}
 
 
 further, I have attached the relevant haskell file in the zip file along with the handin.
 
-\vfill
 
 \section{Task 4 - CUDA programming}
 
