@@ -23,7 +23,6 @@ int scanExcTest(int num_threads) {
 
     unsigned long int elapsed;
     struct timeval t_start, t_end, t_diff;
-    gettimeofday(&t_start, NULL); 
     
     { // calling exclusive scan
         int* d_in;
@@ -35,7 +34,9 @@ int scanExcTest(int num_threads) {
         cudaMemcpy(d_in, h_in, mem_size, cudaMemcpyHostToDevice);
 
         // execute kernel
+        gettimeofday(&t_start, NULL); 
         scanExc< Add<int>,int > ( block_size, num_threads, d_in, d_out );
+        gettimeofday(&t_end, NULL);
 
         // copy device memory to host
         cudaMemcpy(h_out, d_out, mem_size, cudaMemcpyDeviceToHost);
@@ -45,7 +46,6 @@ int scanExcTest(int num_threads) {
         cudaFree(d_out);
     }
     
-    gettimeofday(&t_end, NULL);
     timeval_subtract(&t_diff, &t_end, &t_start);
     elapsed = (t_diff.tv_sec*1e6+t_diff.tv_usec); 
     printf("Scan Exclusive on GPU runs in: %lu microsecs\n", elapsed);
@@ -64,13 +64,13 @@ int scanExcTest(int num_threads) {
     printf("Scan Exclusive on CPU runs in: %lu microsecs\n", elapsed);
 
     bool success = true;
-    int  accum   = 0;
+    accum   = 0;
     for(int i=0; i<num_threads; i++) {
         success  = success && ( abs(h_cpu[i] - h_out[i]) < EPS);
-        //if ( accum != h_out[i] ) { 
-        //    success = false;
-        //    //printf("Scan Exclusive Violation: %.1d should be %.1d\n", h_out[i], accum);
-        //}
+        if ( accum != h_out[i] ) { 
+            success = false;
+            printf("Scan Exclusive Violation: %.1d should be %.1d\n", h_out[i], accum);
+        }
         accum += 1;
     }        
 
@@ -180,7 +180,7 @@ int scanIncTest(bool is_segmented) {
 int main(int argc, char** argv) {
     //scanIncTest(true);
     //scanIncTest(false);
-    scanExcTest(1024);
-    scanExcTest(846);
-    scanExcTest(1999567);
+    scanExcTest(32);
+    scanExcTest(64);
+    scanExcTest(128);
 }

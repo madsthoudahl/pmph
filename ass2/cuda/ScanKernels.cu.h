@@ -1,8 +1,8 @@
-#ifndef MINMAX
-#define MIN_MAX
-MAX(x,y) ( (x) > (y) ? (x) : (y) )
-MIN(x,y) ( (x) < (y) ? (x) : (y) )
-#endif // MINMAX
+//#ifndef MIN_MAX
+//#define MIN_MAX
+//max(x,y) ( (x) > (y) ? (x) : (y) )
+//min(x,y) ( (x) < (y) ? (x) : (y) )
+//#endif // MIN_MAX
 
 #ifndef SCAN_KERS
 #define SCAN_KERS
@@ -52,9 +52,9 @@ class MsspOp {
     typedef MyInt4 BaseType;
     static __device__ inline MyInt4 identity() { return MyInt4(0,0,0,0); }  
     static __device__ inline MyInt4 apply(volatile MyInt4& t1, volatile MyInt4& t2) { 
-        int mss = MAX( MAX( t1.x, t2.x ),( t1.z + t2.y ));
-        int mis = MAX( t1.y, ( t1.w + t2.y )); 
-        int mcs = MAX(( t1.z + t2.w ), t2.z);
+        int mss = max( max( t1.x, t2.x ),( t1.z + t2.y ));
+        int mis = max( t1.y, ( t1.w + t2.y )); 
+        int mcs = max(( t1.z + t2.w ), t2.z);
         int t   = (t1.w+ t2.w); 
         return MyInt4(mss, mis, mcs, t); 
     }
@@ -63,6 +63,12 @@ class MsspOp {
 /***************************************/
 /*** Scan Exclusive Helpers & Kernel ***/
 /***************************************/
+template <class T> __device__ inline void swap(T& a, T& b)
+{
+    T c(a); a=b; b=c;
+}
+
+
 template<class OP, class T>
 __device__ inline
 T scanExcWarp( volatile T* ptr, const unsigned int idx , volatile T* swp) {
@@ -82,27 +88,34 @@ T scanExcWarp( volatile T* ptr, const unsigned int idx , volatile T* swp) {
     if (lane == 31)  ptr[idx] = OP::identity();
 
     // Down-Sweep
+    
     if (lane % 32 == 31) {
-	    swp[idx-16] = ptr[idx];
+            swap(ptr[idx], ptr[idx-16]);
             ptr[idx]    = OP::apply(ptr[idx-16], ptr[idx]);
+            ptr[idx-16] = swp[idx-16];
     }
+    
     if (lane % 16 == 15) { 
-	    swp[idx-8]  = ptr[idx];
+            swap(ptr[idx], ptr[idx-8]);
             ptr[idx]    = OP::apply( ptr[idx-8], ptr[idx]);
+            ptr[idx-8] = swp[idx-8];
     }
     if (lane %  8 ==  7) { 
-	    swp[idx-4]  = ptr[idx];
+            swap(ptr[idx], ptr[idx-4]);
             ptr[idx]    = OP::apply( ptr[idx-4], ptr[idx]);
+            ptr[idx-4] = swp[idx-4];
     }
     if (lane %  4 ==  3) { 
-	    swp[idx-2]  = ptr[idx];
+            swap(ptr[idx], ptr[idx-2]);
             ptr[idx]    = OP::apply( ptr[idx-2], ptr[idx]);
+            ptr[idx-2] = swp[idx-2];
     }
     if (lane %  2 ==  1) { 
-	    swp[idx-1]  = ptr[idx];
+            swap(ptr[idx], ptr[idx-1]);
             ptr[idx]    = OP::apply( ptr[idx-1], ptr[idx]);
+            ptr[idx-1] = swp[idx-1];
     }
-
+    
     return const_cast<T&>(ptr[idx]);
 }
 
