@@ -1,7 +1,7 @@
 #ifndef MINMAX
 #define MIN_MAX
-MAX(x,y) ( x>y : x, y )
-MIN(x,y) ( x<y : x, y )	
+MAX(x,y) ( (x) > (y) ? (x) : (y) )
+MIN(x,y) ( (x) < (y) ? (x) : (y) )
 #endif // MINMAX
 
 #ifndef SCAN_KERS
@@ -59,6 +59,103 @@ class MsspOp {
         return MyInt4(mss, mis, mcs, t); 
     }
 };
+
+/***************************************/
+/*** Scan Exclusive Helpers & Kernel ***/
+/***************************************/
+template<class OP, class T>
+__device__ inline
+T scanExcWarp( volatile T* ptr, const unsigned int idx , volatile T* swp) {
+    const unsigned int lane = idx & 31;
+
+    // no synchronization needed inside a WARP,
+    //   i.e., SIMD execution
+
+    // Up-sweep
+    if (lane %  2 ==  1)  ptr[idx] = OP::apply(ptr[idx-1],  ptr[idx]);
+    if (lane %  4 ==  3)  ptr[idx] = OP::apply(ptr[idx-2],  ptr[idx]);
+    if (lane %  8 ==  7)  ptr[idx] = OP::apply(ptr[idx-4],  ptr[idx]);
+    if (lane % 16 == 15)  ptr[idx] = OP::apply(ptr[idx-8],  ptr[idx]);
+    if (lane % 32 == 31)  ptr[idx] = OP::apply(ptr[idx-16], ptr[idx]);
+    
+    // swap root with neutral element
+    if (lane == 31)  ptr[idx] = OP::identity();
+
+    // Down-Sweep
+    if (lane % 32 == 31) {
+	    swp[idx-16] = ptr[idx];
+            ptr[idx]    = OP::apply(ptr[idx-16], ptr[idx]);
+    }
+    if (lane % 16 == 15) { 
+	    swp[idx-8]  = ptr[idx];
+            ptr[idx]    = OP::apply( ptr[idx-8], ptr[idx]);
+    }
+    if (lane %  8 ==  7) { 
+	    swp[idx-4]  = ptr[idx];
+            ptr[idx]    = OP::apply( ptr[idx-4], ptr[idx]);
+    }
+    if (lane %  4 ==  3) { 
+	    swp[idx-2]  = ptr[idx];
+            ptr[idx]    = OP::apply( ptr[idx-2], ptr[idx]);
+    }
+    if (lane %  2 ==  1) { 
+	    swp[idx-1]  = ptr[idx];
+            ptr[idx]    = OP::apply( ptr[idx-1], ptr[idx]);
+    }
+
+    return const_cast<T&>(ptr[idx]);
+}
+
+template<class OP, class T>
+__device__ inline
+T scanExcBlock(volatile T* ptr, const unsigned int idx, volatile T* swp) {
+    const unsigned int lane   = idx &  31;
+    const unsigned int warpid = idx >> 5;
+
+    T val = scanExcWarp<OP,T>(ptr, idx, swp);
+    __syncthreads();
+
+    // place the end-of-warp results in
+    //   the first warp. This works because
+    //   warp size = 32, and 
+    //   max block size = 32^2 = 1024
+    if (lane == 31) { ptr[warpid] = const_cast<T&>(ptr[idx]); } 
+    __syncthreads();
+
+    //
+    if (warpid == 0) scanExcWarp<OP,T>(ptr, idx, swp);
+    __syncthreads();
+
+    if (warpid > 0) {
+        val = OP::apply(ptr[warpid-1], val);
+    }
+
+    return val;
+}
+
+template<class OP, class T>
+__global__ void 
+scanExcKernel(T* d_in, T* d_out, unsigned int d_size) {
+    extern __shared__ char sh_mem1[];
+    volatile T* sh_memT = (volatile T*)sh_mem1;
+    volatile T* sh_swpT = (volatile T*)sh_mem1;  // swap space
+    const unsigned int tid = threadIdx.x;
+    const unsigned int gid = blockIdx.x*blockDim.x + tid;
+    // allocate and fill shared memory with values or neutral elements
+    T el    = (gid < d_size) ? d_in[gid] : OP::identity();
+    sh_memT[tid] = el;
+    __syncthreads();
+
+    // calculate result by executing kernel
+    T res   = scanExcBlock < OP, T >(sh_memT, tid, sh_swpT);
+    if (gid < d_size) d_out [gid] = res; 
+}
+
+
+
+
+
+
 
 /***************************************/
 /*** Scan Inclusive Helpers & Kernel ***/
