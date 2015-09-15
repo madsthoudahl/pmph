@@ -15,6 +15,82 @@ int timeval_subtract(struct timeval *result, struct timeval *t2, struct timeval 
     return (diff<0);
 }
 
+/**
+ * block_size is the size of the cuda block (must be a multiple 
+ *                of 32 less than 1025)
+ * d_size     is the size of both the input and output arrays.
+ * d_in       is the device array; it is supposably
+ *                allocated and holds valid values (input).
+ * d_out      is the output GPU array -- if you want 
+ *            its data on CPU needs to copy it back to host.
+ *
+ * OP         class denotes the associative binary operator 
+ *                and should have an implementation similar to 
+ *                `class Add' in ScanUtil.cu, i.e., exporting
+ *                `identity' and `apply' functions.
+ * T          denotes the type on which OP operates, 
+ *                e.g., float or int. 
+ */
+template<class OP, class T>
+void sgmShiftRight( unsigned int  block_size,
+                    unsigned long d_size, 
+                    T*            d_in,     // device
+                    T*            flags_d,  // device
+                    T*            d_out,    // device
+                    T             ne        // neutral element
+) {
+    unsigned int num_blocks;
+    unsigned int sh_mem_size = block_size * 32; //sizeof(T);
+
+    num_blocks = ( (d_size % block_size) == 0) ?
+                    d_size / block_size     :
+                    d_size / block_size + 1 ;
+
+    sgmShiftRightByOne<T><<< num_blocks, block_size, sh_mem_size >>>
+        (d_in, flags_d, d_out, ne, d_size);
+    cudaThreadSynchronize();
+    
+    return;
+}
+
+
+/**
+ * block_size is the size of the cuda block (must be a multiple 
+ *                of 32 less than 1025)
+ * d_size     is the size of both the input and output arrays.
+ * d_in       is the device array; it is supposably
+ *                allocated and holds valid values (input).
+ * d_out      is the output GPU array -- if you want 
+ *            its data on CPU needs to copy it back to host.
+ *
+ * OP         class denotes the associative binary operator 
+ *                and should have an implementation similar to 
+ *                `class Add' in ScanUtil.cu, i.e., exporting
+ *                `identity' and `apply' functions.
+ * T          denotes the type on which OP operates, 
+ *                e.g., float or int. 
+ */
+template<class T>
+void shiftRight( unsigned int  block_size,
+                 unsigned long d_size, 
+                 T*            d_in,  // device
+                 T*            d_out, // device
+                 T             ne     // neutral element
+) {
+    unsigned int num_blocks;
+    unsigned int sh_mem_size = block_size * 32; //sizeof(T);
+
+    num_blocks = ( (d_size % block_size) == 0) ?
+                    d_size / block_size     :
+                    d_size / block_size + 1 ;
+
+    shiftRightByOne<T><<< num_blocks, block_size, sh_mem_size >>>
+        (d_in, d_out, ne, d_size);
+    cudaThreadSynchronize();
+    
+    return;
+}
+
 
 /**
  * block_size is the size of the cuda block (must be a multiple 

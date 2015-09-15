@@ -7,7 +7,7 @@
 #define EPS 0.0005
 
 int scanExcTest(bool is_segmented) {
-    const unsigned int num_threads = 8353455;
+    const unsigned int num_threads = 8963448;
     const unsigned int block_size  = 512;
     unsigned int mem_size = num_threads * sizeof(int);
 
@@ -41,17 +41,18 @@ int scanExcTest(bool is_segmented) {
         cudaMemcpy(flags_d, flags_h, num_threads*sizeof(int), cudaMemcpyHostToDevice);
 
         // execute kernel
+        // REUSE d_in array by switching (d_in and d_out) arguments of (sgm)shiftRight...
         if(is_segmented) {
             sgmScanInc< Add<int>,int > ( block_size, num_threads, d_in, flags_d, d_out );
-	    sgmShiftRightByOne<int>(d_in, d_out, Add<int>::identity(), num_threads);
+	    sgmShiftRight<int>( block_size, num_threads, d_out, flags_d, d_in, Add<int>::identity());
 	}
         else {
             scanInc< Add<int>,int > ( block_size, num_threads, d_in, d_out );
-	    shiftRightByOne<int>(d_in, d_out, Add<int>::identity(), num_threads);
+	    shiftRight<int>( block_size, num_threads, d_out, d_in, Add<int>::identity());
 	}
 
-        // copy device memory to host
-        cudaMemcpy(h_out, d_out, mem_size, cudaMemcpyDeviceToHost);
+        // copy device memory to host - REMEMBER d_in holds result
+        cudaMemcpy(h_out, d_in, mem_size, cudaMemcpyDeviceToHost);
 
         // cleanup memory
         cudaFree(d_in );
@@ -59,10 +60,13 @@ int scanExcTest(bool is_segmented) {
         cudaFree(flags_d);
     }
 
+    char segmented = ' ';
+    if (is_segmented) segmented = 's';
     gettimeofday(&t_end, NULL);
     timeval_subtract(&t_diff, &t_end, &t_start);
     elapsed = (t_diff.tv_sec*1e6+t_diff.tv_usec); 
-    printf("Scan Exclusive on GPU runs in: %lu microsecs\n", elapsed);
+    //printf("Scan Exclusive on GPU runs in: %lu microsecs\n", elapsed);
+    printf("%cScanExclusive on GPU runs in: %lu microsecs", segmented, elapsed);
 
     // validation
     bool success = true;
@@ -72,7 +76,7 @@ int scanExcTest(bool is_segmented) {
             if (i % sgm_size == 0) accum  = 0;
             if ( abs(accum - h_out[i])>EPS ) { 
                 success = false;
-                printf("Scan Exclusive Violation: %.1d should be %.1d\n", h_out[i], accum);
+                printf("%cScan Exclusive Violation: %.1d should be %.1d\n", segmented, h_out[i], accum);
             }
             accum += 1;
         }        
@@ -80,14 +84,14 @@ int scanExcTest(bool is_segmented) {
         for(int i=0; i<num_threads; i++) {
             if ( abs(accum - h_out[i])>EPS ) { 
                 success = false;
-                printf("Scan Exclusive Violation: %.1d should be %.1d\n", h_out[i], accum);
+                printf("%cScan Exclusive Violation: %.1d should be %.1d\n", segmented, h_out[i], accum);
             }
             accum += 1;
         }        
     }
 
-    if(success) printf("\nScan Exclusive +   VALID RESULT!\n");
-    else        printf("\nScan Exclusive + INVALID RESULT!\n");
+    if(success) printf("\n%cScan Exclusive +   VALID RESULT!\n",segmented);
+    else        printf("\n%cScan Exclusive + INVALID RESULT!\n",segmented);
 
 
     // cleanup memory
@@ -123,7 +127,7 @@ int scanIncTest(bool is_segmented) {
     gettimeofday(&t_start, NULL); 
 
 
-    { // calling exclusive (segmented) scan
+    { // calling inclusive (segmented) scan
         int* d_in;
         int* d_out;
         int* flags_d;
@@ -153,7 +157,9 @@ int scanIncTest(bool is_segmented) {
     gettimeofday(&t_end, NULL);
     timeval_subtract(&t_diff, &t_end, &t_start);
     elapsed = (t_diff.tv_sec*1e6+t_diff.tv_usec); 
-    printf("Scan Exclusive on GPU runs in: %lu microsecs\n", elapsed);
+    char segmented = ' ';
+    if (is_segmented) segmented = 's';
+    printf("%cScanInclusive on GPU runs in: %lu microsecs", segmented, elapsed);
 
     // validation
     bool success = true;
@@ -165,7 +171,7 @@ int scanIncTest(bool is_segmented) {
             
             if ( accum != h_out[i] ) { 
                 success = false;
-                //printf("Scan Exclusive Violation: %.1d should be %.1d\n", h_out[i], accum);
+                //printf("Scan Inclusive Violation: %.1d should be %.1d\n", h_out[i], accum);
             }
         }        
     } else {
@@ -174,13 +180,13 @@ int scanIncTest(bool is_segmented) {
  
             if ( accum != h_out[i] ) { 
                 success = false;
-                //printf("Scan Exclusive Violation: %.1d should be %.1d\n", h_out[i], accum);
+                //printf("Scan Inclusive Violation: %.1d should be %.1d\n", h_out[i], accum);
             }
         }        
     }
 
-    if(success) printf("\nScan Exclusive +   VALID RESULT!\n");
-    else        printf("\nScan Exclusive + INVALID RESULT!\n");
+    if(success) printf("\n%cScan Inclusive +   VALID RESULT!\n",segmented);
+    else        printf("\n%cScan Inclusive + INVALID RESULT!\n",segmented);
 
 
     // cleanup memory
@@ -195,6 +201,6 @@ int main(int argc, char** argv) {
     //scanIncTest(true);
     //scanIncTest(true);
     //scanIncTest(false);
-    scanExcTest(true);
     scanExcTest(false);
+    scanExcTest(true);
 }
