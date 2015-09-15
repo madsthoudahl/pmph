@@ -136,7 +136,7 @@ T scanExcBlock(volatile T* ptr, const unsigned int idx, volatile T* swp) {
     __syncthreads();
 
     //
-    if (warpid == 0) scanExcWarp<OP,T>(ptr, idx, swp);
+    if (warpid == 0) scanIncWarp<OP,T>(ptr, idx, swp);
     __syncthreads();
 
     if (warpid > 0) {
