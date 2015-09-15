@@ -135,8 +135,8 @@ T scanExcBlock(volatile T* ptr, const unsigned int idx, volatile T* swp) {
     if (lane == 31) { ptr[warpid] = const_cast<T&>(ptr[idx]); } 
     __syncthreads();
 
-    //
-    if (warpid == 0) scanIncWarp<OP,T>(ptr, idx, swp);
+    // ?? USE ***ScanIncWarp*** ?? when handling lastlanes ??
+    if (warpid == 0) { scanExcWarp<OP,T>(ptr, idx, swp); }
     __syncthreads();
 
     if (warpid > 0) {
