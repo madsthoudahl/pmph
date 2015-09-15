@@ -1,9 +1,3 @@
-//#ifndef MIN_MAX
-//#define MIN_MAX
-//max(x,y) ( (x) > (y) ? (x) : (y) )
-//min(x,y) ( (x) < (y) ? (x) : (y) )
-//#endif // MIN_MAX
-
 #ifndef SCAN_KERS
 #define SCAN_KERS
 
@@ -59,116 +53,6 @@ class MsspOp {
         return MyInt4(mss, mis, mcs, t); 
     }
 };
-
-/***************************************/
-/*** Scan Exclusive Helpers & Kernel ***/
-/***************************************/
-template <class T> __device__ inline void swap(T& a, T& b)
-{
-    T c(a); a=b; b=c;
-}
-
-
-template<class OP, class T>
-__device__ inline
-T scanExcWarp( volatile T* ptr, const unsigned int idx , volatile T* swp) {
-    const unsigned int lane = idx & 31;
-
-    // no synchronization needed inside a WARP,
-    //   i.e., SIMD execution
-
-    // Up-sweep
-    if (lane %  2 ==  1)  ptr[idx] = OP::apply(ptr[idx-1],  ptr[idx]);
-    if (lane %  4 ==  3)  ptr[idx] = OP::apply(ptr[idx-2],  ptr[idx]);
-    if (lane %  8 ==  7)  ptr[idx] = OP::apply(ptr[idx-4],  ptr[idx]);
-    if (lane % 16 == 15)  ptr[idx] = OP::apply(ptr[idx-8],  ptr[idx]);
-    if (lane % 32 == 31)  ptr[idx] = OP::apply(ptr[idx-16], ptr[idx]);
-    
-    // swap root with neutral element
-    if (lane == 31)  ptr[idx] = OP::identity();
-
-    // Down-Sweep
-    
-    if (lane % 32 == 31) {
-            swap(ptr[idx], ptr[idx-16]);
-            ptr[idx]    = OP::apply(ptr[idx-16], ptr[idx]);
-            ptr[idx-16] = swp[idx-16];
-    }
-    
-    if (lane % 16 == 15) { 
-            swap(ptr[idx], ptr[idx-8]);
-            ptr[idx]    = OP::apply( ptr[idx-8], ptr[idx]);
-            ptr[idx-8] = swp[idx-8];
-    }
-    if (lane %  8 ==  7) { 
-            swap(ptr[idx], ptr[idx-4]);
-            ptr[idx]    = OP::apply( ptr[idx-4], ptr[idx]);
-            ptr[idx-4] = swp[idx-4];
-    }
-    if (lane %  4 ==  3) { 
-            swap(ptr[idx], ptr[idx-2]);
-            ptr[idx]    = OP::apply( ptr[idx-2], ptr[idx]);
-            ptr[idx-2] = swp[idx-2];
-    }
-    if (lane %  2 ==  1) { 
-            swap(ptr[idx], ptr[idx-1]);
-            ptr[idx]    = OP::apply( ptr[idx-1], ptr[idx]);
-            ptr[idx-1] = swp[idx-1];
-    }
-    
-    return const_cast<T&>(ptr[idx]);
-}
-
-template<class OP, class T>
-__device__ inline
-T scanExcBlock(volatile T* ptr, const unsigned int idx, volatile T* swp) {
-    const unsigned int lane   = idx &  31;
-    const unsigned int warpid = idx >> 5;
-
-    T val = scanExcWarp<OP,T>(ptr, idx, swp);
-    __syncthreads();
-
-    // place the end-of-warp results in
-    //   the first warp. This works because
-    //   warp size = 32, and 
-    //   max block size = 32^2 = 1024
-    if (lane == 31) { ptr[warpid] = const_cast<T&>(ptr[idx]); } 
-    __syncthreads();
-
-    // ?? USE ***ScanIncWarp*** ?? when handling lastlanes ??
-    if (warpid == 0) { scanExcWarp<OP,T>(ptr, idx, swp); }
-    __syncthreads();
-
-    if (warpid > 0) {
-        val = OP::apply(ptr[warpid-1], val);
-    }
-
-    return val;
-}
-
-template<class OP, class T>
-__global__ void 
-scanExcKernel(T* d_in, T* d_out, unsigned int d_size) {
-    extern __shared__ char sh_mem1[];
-    volatile T* sh_memT = (volatile T*)sh_mem1;
-    volatile T* sh_swpT = (volatile T*)sh_mem1;  // swap space
-    const unsigned int tid = threadIdx.x;
-    const unsigned int gid = blockIdx.x*blockDim.x + tid;
-    // allocate and fill shared memory with values or neutral elements
-    T el    = (gid < d_size) ? d_in[gid] : OP::identity();
-    sh_memT[tid] = el;
-    __syncthreads();
-
-    // calculate result by executing kernel
-    T res   = scanExcBlock < OP, T >(sh_memT, tid, sh_swpT);
-    if (gid < d_size) d_out [gid] = res; 
-}
-
-
-
-
-
-
 
 /***************************************/
 /*** Scan Inclusive Helpers & Kernel ***/
@@ -393,7 +277,7 @@ __global__ void
 sgmShiftRightByOne(T* d_in, int*flags, T* d_out, T ne, unsigned int d_size) {
     const unsigned int gid = blockIdx.x*blockDim.x + threadIdx.x;
     if(gid < d_size) {
-        // ... fill in the blanks ...
+        // TODO... fill in the blanks ...
     }
 }
 
@@ -411,7 +295,7 @@ __global__ void
 msspTrivialMap(int* inp_d, MyInt4* inp_lift, int inp_size) {
     const unsigned int gid = blockIdx.x*blockDim.x + threadIdx.x;
     if(gid < inp_size) {
-        // ... fill in the blanks ...
+        // ... TODO fill in the blanks ...
     }
 }
 
@@ -428,7 +312,7 @@ __global__ void
 spMatVctMult_pairs(int* mat_inds, float* mat_vals, float* vct, int tot_size, float* tmp_pairs) {
     const unsigned int gid = blockIdx.x*blockDim.x + threadIdx.x;
     if(gid < tot_size) {
-        //tmp_pairs[gid] = ... fill in the blanks ...
+        //tmp_pairs[gid] = TODO ... fill in the blanks ...
     }
 }
 
@@ -451,7 +335,7 @@ __global__ void
 write_lastSgmElem(float* tmp_scan, int* tmp_inds, int* flags_d, int tot_size, float* vct_res) {
     const unsigned int gid = blockIdx.x*blockDim.x + threadIdx.x;
     if(gid < tot_size) {
-        // ... fill in the blanks ...
+        // TODO ... fill in the blanks ...
     }
 }
 
