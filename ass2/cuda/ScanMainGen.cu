@@ -1,14 +1,87 @@
 #include <stdlib.h>
+#include <limits.h>
 #include <stdio.h>
 #include <string.h>
 #include <math.h>
 #include "ScanHost.cu.h"
 
 #define EPS 0.0005
+#define NUM_THREADS 8963448
+#define BLOCK_SIZE 512
+
+int mssTest(){
+    const unsigned int num_threads = NUM_THREADS;
+    const unsigned int block_size  = BLOCK_SIZE;
+    unsigned int mem_size_int = num_threads * sizeof(int);
+    unsigned int mem_size_myint = num_threads * sizeof(MyInt4);
+
+    int* h_in    = (int*) malloc(mem_size_int);
+    int* h_out   = (int*) malloc(mem_size_int);
+    //int* h_out   = (int*) malloc(sizeof(int));
+
+    { // init segments and flags
+        for(unsigned int i=0; i<num_threads; i++) {
+            h_in   [i] = 1; 
+        }
+    }
+
+    unsigned long int elapsed;
+    struct timeval t_start, t_end, t_diff;
+    gettimeofday(&t_start, NULL); 
+
+
+    { // calling exclusive (segmented) scan
+        int* d_in, *d_out;
+        MyInt4* d_calc, *d_myint;
+        cudaMalloc((void**)&d_in ,    mem_size_int);
+        cudaMalloc((void**)&d_out ,   mem_size_int);
+        cudaMalloc((void**)&d_myint,  mem_size_myint);
+        cudaMalloc((void**)&d_calc,   mem_size_myint);
+        //cudaMalloc((void**)&d_out,    sizeof(int));
+
+        // copy host memory to device
+        cudaMemcpy(d_in, h_in, mem_size_int, cudaMemcpyHostToDevice);
+
+        { // execute kernels
+            // copy the values to a 4-tuple datastructure to support the calculations needed
+            createMyInt4array(block_size, num_threads, d_in, d_myint);
+            // Use a Scan Inclusive with special MssOP operation on array
+            scanInc< MsspOp, MyInt4 > ( block_size, num_threads, d_myint, d_calc );
+	    // extract the last element of the calculation which hold the result
+            extractLastAsInt( block_size, num_threads, d_calc, d_out ); // d_in should be d_out?
+        }
+
+        // copy device memory to host 
+        cudaMemcpy(h_out, d_out, mem_size_int, cudaMemcpyDeviceToHost);
+
+        // cleanup memory
+        cudaFree(d_in );
+        cudaFree(d_out);
+        cudaFree(d_myint);
+        cudaFree(d_calc);
+    }
+
+    gettimeofday(&t_end, NULL);
+    timeval_subtract(&t_diff, &t_end, &t_start);
+    elapsed = (t_diff.tv_sec*1e6+t_diff.tv_usec); 
+    printf("MaximumSegmentSum on GPU runs in: %lu microsecs\n", elapsed);
+
+    // validation
+    bool success = (h_out[0] == NUM_THREADS);
+    if (success) printf("\nMSS +   VALID RESULT! %d\n",h_out);
+    else         printf("\nMSS + INVALID RESULT! %d should be %d\n",h_out, NUM_THREADS);
+    printf("Largest Valid int is: %d\n",INT_MAX);
+
+    // cleanup memory
+    free(h_in );
+
+    return 0;
+}
+
 
 int scanExcTest(bool is_segmented) {
-    const unsigned int num_threads = 8963448;
-    const unsigned int block_size  = 512;
+    const unsigned int num_threads = NUM_THREADS;
+    const unsigned int block_size  = BLOCK_SIZE;
     unsigned int mem_size = num_threads * sizeof(int);
 
     int* h_in    = (int*) malloc(mem_size);
@@ -66,7 +139,7 @@ int scanExcTest(bool is_segmented) {
     timeval_subtract(&t_diff, &t_end, &t_start);
     elapsed = (t_diff.tv_sec*1e6+t_diff.tv_usec); 
     //printf("Scan Exclusive on GPU runs in: %lu microsecs\n", elapsed);
-    printf("%cScanExclusive on GPU runs in: %lu microsecs", segmented, elapsed);
+    printf("%cScan Exclusive on GPU runs in: %lu microsecs", segmented, elapsed);
 
     // validation
     bool success = true;
@@ -106,8 +179,8 @@ int scanExcTest(bool is_segmented) {
 
 
 int scanIncTest(bool is_segmented) {
-    const unsigned int num_threads = 8353455;
-    const unsigned int block_size  = 512;
+    const unsigned int num_threads = NUM_THREADS;
+    const unsigned int block_size  = BLOCK_SIZE;
     unsigned int mem_size = num_threads * sizeof(int);
 
     int* h_in    = (int*) malloc(mem_size);
@@ -159,7 +232,7 @@ int scanIncTest(bool is_segmented) {
     elapsed = (t_diff.tv_sec*1e6+t_diff.tv_usec); 
     char segmented = ' ';
     if (is_segmented) segmented = 's';
-    printf("%cScanInclusive on GPU runs in: %lu microsecs", segmented, elapsed);
+    printf("%cScan Inclusive on GPU runs in: %lu microsecs", segmented, elapsed);
 
     // validation
     bool success = true;
@@ -198,9 +271,10 @@ int scanIncTest(bool is_segmented) {
 }
 
 int main(int argc, char** argv) {
-    //scanIncTest(true);
-    //scanIncTest(true);
-    //scanIncTest(false);
+    scanIncTest(true);
+    scanIncTest(false);
+    scanIncTest(true);
     scanExcTest(false);
     scanExcTest(true);
+    mssTest();
 }

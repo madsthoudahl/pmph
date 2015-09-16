@@ -46,13 +46,33 @@ class MsspOp {
     typedef MyInt4 BaseType;
     static __device__ inline MyInt4 identity() { return MyInt4(0,0,0,0); }  
     static __device__ inline MyInt4 apply(volatile MyInt4& t1, volatile MyInt4& t2) { 
-        int mss = max( max( t1.x, t2.x ),( t1.z + t2.y ));
-        int mis = max( t1.y, ( t1.w + t2.y )); 
-        int mcs = max(( t1.z + t2.w ), t2.z);
-        int t   = (t1.w+ t2.w); 
+        int mss = max( max( t1.x, t2.x ),( t1.z + t2.y )); // max segment sum
+        int mis = max( t1.y, ( t1.w + t2.y ));             // max initial sum
+        int mcs = max(( t1.z + t2.w ), t2.z);              // max conclusive sum
+        int t   = (t1.w+ t2.w);                            // total sum
         return MyInt4(mss, mis, mcs, t); 
     }
 };
+
+
+/*******************************************/
+/*** MaxSegmentSum Helper & Kernel       ***/
+/*******************************************/
+__global__ void 
+createMyInt4Kernel(int* d_in, MyInt4* d_out, unsigned int d_size) {
+    const unsigned int gid = blockIdx.x*blockDim.x + threadIdx.x;
+    
+    if (gid < d_size)  d_out[gid] = MyInt4( d_in[gid], d_in[gid], d_in[gid], d_in[gid]);
+}
+
+
+__global__ void 
+extractLastKernel(MyInt4* d_in, int* d_out, unsigned int d_size) {
+    const unsigned int gid = blockIdx.x*blockDim.x + threadIdx.x;
+    
+    if (gid == (d_size-1)) d_out[0] = d_in[gid].x;  
+}
+
 
 /***************************************/
 /*** Scan Inclusive Helpers & Kernel ***/

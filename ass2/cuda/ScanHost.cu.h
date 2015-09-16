@@ -15,6 +15,42 @@ int timeval_subtract(struct timeval *result, struct timeval *t2, struct timeval 
     return (diff<0);
 }
 
+void createMyInt4array( unsigned int block_size, 
+                        unsigned int d_size, 
+                        int*         d_in,      // device
+                        MyInt4*      d_myint    // device
+) {
+    unsigned int num_blocks;
+    num_blocks = ( (d_size % block_size) == 0) ?
+                    d_size / block_size     :
+                    d_size / block_size + 1 ;
+
+    unsigned int sh_mem_size = block_size * sizeof(MyInt4); // ? enough ?
+
+    // copy the values over in an array of the type needed to perform the calculations
+    createMyInt4Kernel<<< num_blocks, block_size, sh_mem_size >>>(d_in, d_myint, d_size);
+
+}
+
+void extractLastAsInt(  unsigned int block_size, 
+                        unsigned int d_size, 
+                        MyInt4*      d_in,      // device
+                        int*         d_out      // device
+) {
+    unsigned int num_blocks;
+    num_blocks = ( (d_size % block_size) == 0) ?
+                    d_size / block_size     :
+                    d_size / block_size + 1 ;
+    unsigned int sh_mem_size = block_size * sizeof(MyInt4); // ? enough ?
+
+    extractLastKernel<<<num_blocks, block_size, sh_mem_size>>>(d_in, d_out, d_size);
+
+}
+    // Use a ScanInclusive (MssOP) operation on the array to calculate the maximum segment sum
+    // Extract the last value from the array and return it
+//	extractLast<int>( block_size, num_threads, d_calc, d_out );
+
+
 /**
  * block_size is the size of the cuda block (must be a multiple 
  *                of 32 less than 1025)
@@ -31,7 +67,7 @@ int timeval_subtract(struct timeval *result, struct timeval *t2, struct timeval 
  * T          denotes the type on which OP operates, 
  *                e.g., float or int. 
  */
-template<class OP, class T>
+template<class T>
 void sgmShiftRight( unsigned int  block_size,
                     unsigned long d_size, 
                     T*            d_in,     // device
