@@ -19,10 +19,54 @@ To improve readability of my solutions, some extra pages have been used although
 
 \section{CUDA Programming with reduce and Segmented Scan}
 \subsection{Task 1 Implement ExclusiveScan and SegmentedExclusiveScan}
-See attached code
+By using the already implemented \texttt{ScanInclusive} code, the algorithm will look something like this:
+
+\begin{verbatim}
+ ScanExc(arr_in):
+   arr_tmp       <- ScanInc OP       # [a1, a1 OP a2, ..., a1 OP .. OP an ]
+   arr_out[1:n]  <- arr_tmp[0:n-1]   # Shift Right operation   - O(N/P)
+   arr_out[0]    <- neutral element  # insert neutral element  - O(N/P)
+   return arr_out
+\end{verbatim}
+
+The attached code compiles and runs, and does indeed test the (segmented)ScanExclusive implementation.
+
+
 
 \subsection{Task 2 - Implement MaximumSegmentSum problem}
-See attached code
+Algorithm implemented:
+\begin{verbatim}
+ ScanExc(arr_in):
+   arr_myint4    <- Conversion(arr_in) # [(a1,a1,a1,a1),..,(an,an,an,an)]
+   arr_tmp       <- ScanInc MsspOp     # [A1, A1 OP A2, ..., A1 OP .. OP An ]
+   res_myint4    <- arr_tmp[last]      # A1 OP A2 OP .. OP An
+   res           <- choose(res_myint4) # (res, _mis, _mcs, _ts)
+   return res
+\end{verbatim}
+As I had a bit of inconvenience using scalar int type, while implementing, I chose to 'get on' returning an entire array with a single value (i know that is a waste, i will correct if it has any impact on score).
+
+\begin{verbatim}
+from ScanKernels.cu.h
+__global__ void
+createMyInt4Kernel(int* d_in, MyInt4* d_out, unsigned int d_size) {
+    const unsigned int gid = blockIdx.x*blockDim.x + threadIdx.x;
+    if (gid < d_size)  d_out[gid] = MyInt4( d_in[gid], d_in[gid], d_in[gid], d_in[gid]);
+}
+
+class MsspOp {
+  public: ..
+    static __device__ inline MyInt4 apply(volatile MyInt4& t1, volatile MyInt4& t2) {
+        int mss = max( max( t1.x, t2.x ),( t1.z + t2.y )); // max segment sum
+        int mis = max( t1.y, ( t1.w + t2.y ));             // max initial sum
+        int mcs = max(( t1.z + t2.w ), t2.z);              // max conclusive sum
+        int t   = (t1.w+ t2.w);                            // total sum
+        return MyInt4(mss, mis, mcs, t);    }     
+};
+\end{verbatim}
+See attached code for further insights
+
+Code runs and tests the quite boring array [1,1,1,1,..] where \texttt{mss=n} and n is length of array.
+
 
 
 \subsection{Task 3 - Implement Sparse Vector Matrix Multiplication in CUDA}
@@ -211,10 +255,56 @@ I assume that internal register forwarding means that the values of a given regi
 \subsubsection{improvements}
 By unrollin the loop, more values can be loaded into the registers, avoiding the hazards, thus avoid stalling - minimum 2 more registers are needed.
 As branching takes more time, make the common case faster by rewriting the code to branch in the lesser common case.. i.e. on a match..
-If search area is not divisible by # regs used in loop unroll, some code has to be included to correctly handle the end-case.
+If search area is not divisible by \# regs used in loop unroll, some code has to be included to correctly handle the end-case.
+Delayed branching will not help much for this chunk of code, as we have got 2 branches in 6 instructions, thus not enough instructions to fill in the 2 slots behind the branches.
+If one performs a software pipelining, one just might be able to utilize the 2 slots in the delayed branching, But it will have an impact on the amount of used registers.
+
 
 \newpage
 \subsection{Task 2 - Vector Machines}
-Tuesday lecture
+\subsubsection{The machine code with vector instructions for each 64 bit slice using loads and arithmetic instructions}
+We have 8 vector registers, performing 2 operations will be possible at the same time as both use 3.
+This assumes that there exist 2 MUL components..
+
+I believe the code underneath produces a 2 vector ops in parallel, reducing the needed loops to 8 (instead of 16).
+\begin{verbatim}
+        OPERATION                |  COMMENT
+ __________________________________________________________________________________________
+        ADDI   R5    R0    #1024 | Set length of calculation
+        ADDI   R4    R0    #1    | Set Register4 to 1 (the stride) 
+ LOOP:                           | ASSUME 2 MUL COMPONENTS
+        L.V    V1    0(R1) R4    | Load from pos in Reg1 by the stride of 1 into Vreg1
+        L.V    V2    0(R2) R4    | Load from pos in Reg2 by the stride of 1 into Vreg2
+        ADDI   R1    R1    #512  | update address for R1 for next iteration
+        ADDI   R2    R2    #512  |  --||-- for R2 (assuming length of '8' Bytes - doubles)
+        L.V    V3    0(R1) R4    | Load from pos in Reg1 by the stride of 1 into Vreg3
+        L.V    V4    0(R2) R4    | Load from pos in Reg2 by the stride of 1 into Vreg4
+        ADDI   R1    R1    #512  | update address for R1 for next iteration
+        ADDI   R2    R2    #512  |  --||-- for R2 (assuming length of '8' Bytes - doubles)
+
+        MUL.V  V5    V1    V2    | V5 <- V1 * V2   elementwise
+        MUL.V  V6    V1    V2    | V6 <- V3 * V4   elementwise
+
+        S.V    V5    0(R3)       | Store to mem starting at pos at R3
+        ADDI   R3    R3    #512  | Update address for R3 (store address)
+        S.V    V6    0(R3)       | Store to mem starting at pos at R3
+        ADDI   R3    R3    #512  | Update address for R3 (store address)
+
+        SUBBI  R5    R5    #128  | Update outer loop index counter  by 2*64  
+        BNEZ   R5    LOOP        | Repeat until end of calc
+\end{verbatim}
+
+
+\subsubsection{Compute the time taken (in clocks) by a dot product of size 1024}
+Using the code above we get:
+$$ T_{execution} = startup(load) + startup(mul) + startup store + Number of vectors * Vector Length $$
+$$ T_{execution} = 30 + 10 + 30 + (16/2) * 64  = 582 $$
+I neglect the few instructions might be involved by duplicating the code (estimated 5-8 clc), and the time used to sum up the stored vector.
+
+
+\subsubsection{Compute the time taken (in clocks) by a matrix multiplication of two 1024 x 1024 matrices}
+Each entrance of the resulting matrix is created by a dotproduct of two 1024 vectors. as there exist $1024^2$ entrances, each taking $582$ clockcycles to calculate (neglecting the addition phase).
+$$T_{mmul} = 582 \cdot 1024^2 \sim 610.3 M clocks $$
+This assumes the matrices are represented as dense matrices, which each takes up $8*1024*1024 \sim 8 M $ Bytes of data.
 
 \end{document}
