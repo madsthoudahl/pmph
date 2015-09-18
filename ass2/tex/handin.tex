@@ -70,7 +70,42 @@ Code runs and tests the quite boring array [1,1,1,1,..] where \texttt{mss=n} and
 
 
 \subsection{Task 3 - Implement Sparse Vector Matrix Multiplication in CUDA}
+
+\subsubsection{Nested implementation in haskell}
+
+\subsubsection{flattened implementation in haskell}
+
+Some difficulties making the last part compile, writing to an array, but the idea should be sound.
+\begin{verbatim}
+flatSparseMatVctMult :: [Int] -> [(Int,Double)] -> [Double] -> [Double]
+flatSparseMatVctMult flags mat vec =                               -- flags [1,0,1,0,0,1,0,0,0]
+  let tot_num_elems = length flags
+      vlen          = length vec
+      (idxs, vals)  = unzip mat
+      result        = replicate (last $ scanInc (+) 0 flags) 0
+      vvals         = map (\idx -> vec !! idx) idxs
+      prods         = map (\(val, vval) -> val * vval) (zip vals vvals)
+    --rowsizes      = zipWith (*) flags (scanInc (+) 0 flags)--fail!    [2,0,3,0,0,4,0,0,0]
+      rowsizes      = zipWith (*) flags (scanInc (+) 0 flags)  -- goal    [2,0,3,0,0,4,0,0,0]
+      sgmres        = segmScanInc (+) 0 rowsizes prods         -- resuls  [_,r,_,_,r,_,_,_,r]
+      matchidx      = [0..]                                    -- matchidx[0,1,2,3,4,5,6,7,8]
+      residx        = map (\x -> x-1) (scanInc (+) 0 rowsizes) -- res idx [1,1,4,4,4,8,8,8,8]
+      newidx        = map (\x -> x-1) (scanInc (+) 0 flags)    -- new idx [0,0,1,1,1,2,2,2,2]
+      _write        = map (\(rres,mi,ri,ni) -> if (mi==ri) then write [ni] [rres] result
+                                                           else write [0] [rres]  prods )
+      -- would use if/else here but last overwrite fixes this, will use if/else in cuda version!
+             (zip4 sgmres matchidx residx newidx)
+     in  result
+\end{verbatim}
+
+\subsubsection{flattened implementation in cuda}
 See attached code in files \texttt{sparsevectmult.cu}
+
+
+
+
+
+
 
 \newpage
 
