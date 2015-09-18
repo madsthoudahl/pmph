@@ -1,6 +1,7 @@
 import System.Environment -- access to arguments etc.
 import Data.Bits
 import Debug.Trace
+import Data.List
 
 import System.IO.Unsafe  -- be careful!
 import System.Random
@@ -204,12 +205,49 @@ flatQuicksort ne sizes arr =
 --- IF YOU GET IT RIGHT flatQuicksort should WORK!---
 -----------------------------------------------------
 segmSpecialFilter :: (a->Bool) -> [Int] -> [a] -> ([Int],[a])
-segmSpecialFilter cond sizes arr =
-    ------------------------------------------------
-    --- Implementation is Bogus, write your own! ---
-    ------------------------------------------------
-    if null arr then (sizes,arr) else
-    (replicate (length arr) 1, replicate (length arr) (head arr))
+segmSpecialFilter cond sizes arr =                 -- sizes [2,0,3,0,0,4,0,0,0]
+    let n      = length arr                        -- arr   [3,2,1,2,3,4,5,7,3]
+        cs     = map cond arr                      --rule 2 [1,0,1,0,1,0,1,1,1]
+        tfs    = map (\f -> if f then 1 else 0) cs --rule 2
+        isT    = segmScanInc (+) 0 sizes tfs       --rule1  [1,1,1,1,2,0,1,2,2] 
+        rsizes = scanInc (+) 0 sizes               --       [2,2,5,5,5,9,9,9,9]
+        ris    = map (\s -> isT !! (s-1) ) rsizes  --residx [1,1,2,2,2,2,2,2,2]
+        tmp1   = scanInc (+) 0 sizes               --       [2,2,5,5,5,9,9,9,9]
+        tmp2   = segmScanInc (+) 0 sizes sizes     --       [2,2,3,3,3,4,4,4,4]
+        offset = zipWith (-) (tmp1) (tmp2)         -- offset[0,0,2,2,2,5,5,5,5]
+        narr   = arr
+--        sgTcnt = segmScanInc (+) 0 sizes tfs     --Tcount [1,1,1,1,2,0,1,2,3]
+--        isF    = zipWith (+) sgTcnt 
+{-      reorganizing the new array...  
+        locidx = ?? use isT and isF
+                    
+        nidxs  = zipWith (+) locidx offset       -- newidx[]
+-}
+        si     = segmScanInc (+) 0 sizes sizes     --       [2,2,3,3,3,4,4,4,4]
+        iotas  = segmScanExc (+) 0 sizes $ replicate n 1
+        nsizes = map (\(f,i,s,ri) -> if f > 0 then if ri > 0 then ri else f
+                                     else if i == ri then s-ri else 0
+            ) $ zip4 sizes iotas si ris            
+        -- nsizes [1,1,2,0,1,2,0,2,0] WORKS
+        --  narr  [3,2,1,3,2,5,7,3,4] DOESNT WORK
+        --
+    in  (nsizes,narr)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 -----------------------------------------------------
 --- ASSIGNMENT 1: implement sparse matrix-vector  ---
@@ -243,16 +281,13 @@ segmSpecialFilter cond sizes arr =
 -----------------------------------------------------
 
 nestSparseMatVctMult :: [[(Int,Double)]] -> [Double] -> [Double]
-nestSparseMatVctMult mat x =
-    map (\row -> let (inds,vals) = unzip row
-                     yi = 0.0 -- implement who yi should be!
-                 in  yi
-            ----------------------------------------------
-            --- Pseudocode:                            ---
-            ---   yi := 0;                             ---
-            ---   for(j = 0; j < length inds; j++)     ---
-            ---       yi := yi + vals[j] * x[ inds[j] ]---
-            ----------------------------------------------
+nestSparseMatVctMult mat vec =
+    map (\row -> let (idxs,vals) = unzip row
+                     vvals       = map (\idx ->  vec !! idx) idxs
+--                   prods       = zipWith (*) vals vvals
+                     prods       = map (\(x,y)-> x*y) (zip vals vvals)
+                     res         = scanInc (+) 0 prods       
+                 in  last res
         ) mat
 
 
@@ -265,15 +300,60 @@ nestSparseMatVctMult mat x =
 ---    ALSO LOOK WHERE IT IS FUNCTION IS CALLED   ---
 -----------------------------------------------------------
 
+-- flags = [1,0,1,0,0,1,0,0,0::Int]
+-- mat = [(0,2),(1,5),(0,1),(1,1),(3,1),(0,1),(1,1),(2,1),(3::Int,1.0::Double)]
+-- vec = [1,2,3,4::Double]
+
 flatSparseMatVctMult :: [Int] -> [(Int,Double)] -> [Double] -> [Double]
-flatSparseMatVctMult flags mat x =
+flatSparseMatVctMult flags mat vec =                               -- flags [1,0,1,0,0,1,0,0,0]
     let tot_num_elems = length flags
-        vct_len       = length x
-        --------------------------------
-        --- Implementation Here      ---
-        --- Figure it out!           ---
-        --------------------------------
-    in  x
+        vlen          = length vec
+        (idxs, vals)  = unzip mat
+        result        = replicate (last $ scanInc (+) 0 flags) 0
+        vvals         = map (\idx -> vec !! idx) idxs
+        prods         = map (\(val, vval) -> val * vval) (zip vals vvals)
+        --rowsizes      = zipWith (*) flags (scanInc (+) 0 flags)--fail!    [2,0,3,0,0,4,0,0,0]
+        rowsizes      = zipWith (*) flags (scanInc (+) 0 flags)  -- goal    [2,0,3,0,0,4,0,0,0]
+        sgmres        = segmScanInc (+) 0 rowsizes prods         -- resuls  [_,r,_,_,r,_,_,_,r]
+        matchidx      = [0..]                                    -- matchidx[0,1,2,3,4,5,6,7,8]
+        residx        = map (\x -> x-1) (scanInc (+) 0 rowsizes) -- res idx [1,1,4,4,4,8,8,8,8]
+        newidx        = map (\x -> x-1) (scanInc (+) 0 flags)    -- new idx [0,0,1,1,1,2,2,2,2]
+        _             = map (\(rres,mi,ri,ni) -> if (mi==ri) then write [ni] [rres] result 
+                                                             else write [0] [rres]  prods )
+        -- would use if/else here but last overwrite fixes this, will use if/else in cuda version!
+            (zip4 sgmres matchidx residx newidx)
+
+    in  result
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 ----------------------------------------
 --- MAIN                             ---
