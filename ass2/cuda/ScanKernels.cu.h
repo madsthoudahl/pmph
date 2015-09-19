@@ -333,7 +333,8 @@ __global__ void
 spMatVctMult_pairs(int* mat_inds, float* mat_vals, float* vct, int tot_size, float* tmp_pairs) {
     const unsigned int gid = blockIdx.x*blockDim.x + threadIdx.x;
     if(gid < tot_size) {
-        //tmp_pairs[gid] = TODO ... fill in the blanks ...
+        v_idx = mat_inds[gid]
+        tmp_pairs[gid] = vct[v_idx] * mat_vals[gid];
     }
 }
 
