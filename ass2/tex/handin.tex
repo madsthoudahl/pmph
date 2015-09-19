@@ -65,38 +65,53 @@ class MsspOp {
 \end{verbatim}
 See attached code for further insights
 
-Code runs and tests the quite boring array [1,1,1,1,..] where \texttt{mss=n} and n is length of array.
+Code runs and successfully tests the quite boring array [1,1,1,1,..] where \texttt{mss=n} and n is length of array.
 
 
 
 \subsection{Task 3 - Implement Sparse Vector Matrix Multiplication in CUDA}
 
 \subsubsection{Nested implementation in haskell}
+\begin{verbatim}
+nestSparseMatVctMult :: [[(Int,Double)]] -> [Double] -> [Double]
+nestSparseMatVctMult mat vec =
+    map (\row -> let (idxs,vals) = unzip row
+                     vvals       = map (\idx ->  vec !! idx) idxs
+                     prods       = map (\(x,y)-> x*y) (zip vals vvals)
+                     res         = scanInc (+) 0 prods
+                 in  last res
+        ) mat
+\end{verbatim}
+
+This Piece of code is tested and works on my own unstructured tests and correctly calculates the matrix in the \texttt{main} function of \texttt{PrimesQuickSort.hs}.
 
 \subsubsection{flattened implementation in haskell}
-
-Some difficulties making the last part compile, writing to an array, but the idea should be sound.
+In the \texttt{vvals} and \texttt{prods} we have a map inside a map, easily resolved by the 2nd rule.
+in the \texttt{res}, the scan is converted to a segmented scan, no problemo..
+The problem appears on retrieving the last result, when it is hidden inside a list of segments.
 \begin{verbatim}
 flatSparseMatVctMult :: [Int] -> [(Int,Double)] -> [Double] -> [Double]
-flatSparseMatVctMult flags mat vec =                               -- flags [1,0,1,0,0,1,0,0,0]
+flatSparseMatVctMult flags mat vec =                           -- flags   [1,0,1,0,0,1,0,0,0]
   let tot_num_elems = length flags
       vlen          = length vec
       (idxs, vals)  = unzip mat
       result        = replicate (last $ scanInc (+) 0 flags) 0
       vvals         = map (\idx -> vec !! idx) idxs
       prods         = map (\(val, vval) -> val * vval) (zip vals vvals)
-    --rowsizes      = zipWith (*) flags (scanInc (+) 0 flags)--fail!    [2,0,3,0,0,4,0,0,0]
-      rowsizes      = zipWith (*) flags (scanInc (+) 0 flags)  -- goal    [2,0,3,0,0,4,0,0,0]
+      rowsizes      = zipWith (*) flags (scanInc (+) 0 flags)  -- goal    [2,0,3,0,0,4,0,0,0] - failed!
       sgmres        = segmScanInc (+) 0 rowsizes prods         -- resuls  [_,r,_,_,r,_,_,_,r]
       matchidx      = [0..]                                    -- matchidx[0,1,2,3,4,5,6,7,8]
       residx        = map (\x -> x-1) (scanInc (+) 0 rowsizes) -- res idx [1,1,4,4,4,8,8,8,8]
       newidx        = map (\x -> x-1) (scanInc (+) 0 flags)    -- new idx [0,0,1,1,1,2,2,2,2]
       _write        = map (\(rres,mi,ri,ni) -> if (mi==ri) then write [ni] [rres] result
-                                                           else write [0] [rres]  prods )
+                                                           else write  [0] [rres]  prods ) -- dummy, but else required
       -- would use if/else here but last overwrite fixes this, will use if/else in cuda version!
              (zip4 sgmres matchidx residx newidx)
      in  result
 \end{verbatim}
+Some difficulties making the last part compile, writing to an array, but the idea should be sound.
+
+The challenge i have not been able to overcome is converting the \texttt{flags} list to a \texttt{sizes} list e.g. [1,0,1,0,0,1,0,0,0] $\rightarrow$ [2,0,3,0,0,4,0,0,0], having the \texttt{rowsizes} failing, thus missing that part in succeeding.
 
 \subsubsection{flattened implementation in cuda}
 See attached code in files \texttt{sparsevectmult.cu}
