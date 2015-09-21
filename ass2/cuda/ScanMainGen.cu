@@ -240,6 +240,96 @@ int scanExcTest(bool is_segmented) {
 
 
 
+int smvmTest() {
+    const int    SIZE = 10;
+    const int    MAT_ROWS = 4;
+    const int    MAT_COLS = 4;
+    const int    VEC_LEN  = 4;
+    const int    h_mat_flags[SIZE] = [1,0,1,0,0,1,0,0,1,0];
+    const int    h_mat_idxs[SIZE]  = [0,1,0,1,2,1,2,3,2,3];
+    const double h_mat_vals[SIZE]  = [2.0, -1.0, -1.0, 2.0, -1.0, -1.0, 2.0, -1.0, -1.0, 2.0];
+    const double h_vec_vals[4]  = [2.0, 1.0, 0.0, 3.0];
+    const double res[4] = [3.0,0.0,-4.0,6.0] // [(2*2-1*1), (-1*2+2*1), (-1*1-1*3),(2*3)]
+
+    if (MAT_ROWS != VEC_LEN) return -1;      // Matrix and vector not aligned
+
+    const unsigned int num_threads = SIZE;
+    const unsigned int block_size  = BLOCK_SIZE;
+    unsigned int mem_size_double = num_threads * sizeof(double);
+    unsigned int mem_size_result = MAT_ROWS * sizeof(double);  
+    unsigned int mem_size_int    = num_threads * sizeof(int);
+
+    int*    h_in_mf  = &h_mat_flags;
+    int*    h_in_mi  = &h_mat_idxs;
+    double* h_in_mv  = &h_mat_vals;
+    double* h_in_vv  = &h_vec_vals;
+    double* h_out    = (double*) malloc(mem_size_result);
+
+
+    unsigned long int elapsed;
+    struct timeval t_start, t_end, t_diff;
+    gettimeofday(&t_start, NULL); 
+
+    {
+        double *d_in_mv, *d_in_vv, *d_tmp, *d_out;
+        int *d_in_mf, *d_in_mi;
+        cudaMalloc((void**)&d_in_mf ,   mem_size_int);
+        cudaMalloc((void**)&d_in_mi ,   mem_size_int);
+        cudaMalloc((void**)&d_in_mv ,   mem_size_double);
+        cudaMalloc((void**)&d_in_vv ,   mem_size_double);
+        //cudaMalloc((void**)&d_tmp   ,   mem_size_double);
+        cudaMalloc((void**)&d_out   ,   mem_size_result);
+
+        // copy host memory to device
+        cudaMemcpy(d_in_mf, h_in_mf, mem_size_int, cudaMemcpyHostToDevice);
+        cudaMemcpy(d_in_mi, h_in_mi, mem_size_int, cudaMemcpyHostToDevice);
+        cudaMemcpy(d_in_mv, h_in_mv, mem_size_double, cudaMemcpyHostToDevice);
+        cudaMemcpy(d_in_vv, h_in_vv, mem_size_double, cudaMemcpyHostToDevice);
+
+        // execute 'host' library function
+	spMatVecMul(block_size, num_threads, d_in_mf, d_in_mi, d_in_mv, d_in_vv, d_out );
+
+        spMatVctMul_pairs<<<num_blocks, block_size>>>(d_in_mi, d_in_mv, d_in_vv, SIZE, d_tmp);
+	sgmScanInc< Add<int>,int > ( block_size, num_threads, d_in, flags_d, d_out );
+        // copy device memory to host
+        cudaMemcpy(h_out, d_out, mem_size_result, cudaMemcpyDeviceToHost);
+
+        // cleanup memory
+        cudaFree(d_in_mf);
+        cudaFree(d_in_mi);
+        cudaFree(d_in_mv);
+        cudaFree(d_in_vv);
+        cudaFree(d_out);
+    }
+
+    gettimeofday(&t_end, NULL);
+    timeval_subtract(&t_diff, &t_end, &t_start);
+    elapsed = (t_diff.tv_sec*1e6+t_diff.tv_usec); 
+    char segmented = ' ';
+    if (is_segmented) segmented = 's';
+    printf("%cScan Inclusive on GPU runs in: %lu microsecs", segmented, elapsed);
+
+    // validation
+    bool success = true;
+    for(int i=0; i<ROW_SIZE; i++){
+        succes &= abs(h_out[i]-res[i])<ABS
+    }        
+
+    if(success) resstring = "  VALID";
+    else        resstring = "INVALID";
+    
+    printf("\nSparseMatrix Vector Multiplication : %s RESULT\n",resstring);
+    printf("\f.2 \f.2 \f.2 \f.2", res[0], res[1],  res[2], res[3]);
+    printf("\f.2 \f.2 \f.2 \f.2", h_out[0], h_out[1],  h_out[2], h_out[3]);
+
+    
+    // cleanup memory
+    // STATIC LOCAL ALLOCATIONS at host level
+
+    return 0;
+}
+
+
 int scanIncTest(bool is_segmented) {
     const unsigned int num_threads = NUM_THREADS;
     const unsigned int block_size  = BLOCK_SIZE;
@@ -332,12 +422,15 @@ int scanIncTest(bool is_segmented) {
     return 0;
 }
 
+
+
 int main(int argc, char** argv) {
     scanIncTest(true);
     scanIncTest(false);
     scanIncTest(true);
     scanExcTest(false);
     scanExcTest(true);
-    mssTest();
+    //mssTest();
     msspTest();
+    smvmTest();
 }

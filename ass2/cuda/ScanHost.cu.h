@@ -289,21 +289,40 @@ int maxSegmentSum(  unsigned int block_size, // block size chosen
 
 void spMatVecMult(      unsigned int block_size,// size of each block used on the device 
                         unsigned int d_size,    // total number of entries in matrix
-                        int*         d_flags_in,// device
-                        int*         d_mat_in,  // device (int,double)
-                        double*      d_vec_in   // device
+                        int*         d_flags,   // device
+                        int*         d_mat_idx, // device
+			double*      d_mat_val, // device
+                        double*      d_vec_val, // device
+		        double*      d_out      // device
 ) {
     unsigned int num_blocks;
     num_blocks = ( (d_size % block_size) == 0) ?
                     d_size / block_size     :
                     d_size / block_size + 1 ;
+    
+    double *d_tmp_pairs *d_tmp_sscan;
+    int *d_tmp_idxs;
+    cudaMalloc((void**)&d_tmp_pairs, sizeof(double) * d_size);
+    cudaMalloc((void**)&d_tmp_sscan, sizeof(double) * d_size);
+    cudaMalloc((void**)&d_tmp_idxs , sizeof(int) * d_size);
+    
+    printf("Performing sparse Matrix vector multiplication");
+    
+    // calculate array of products
+    spMatVctMul_pairs<<<num_blocks, block_size>>>(d_mat_idx, d_mat_val, d_vec_val, d_size, d_tmp_pairs);
 
-    unsigned int sh_mem_size = block_size * sizeof(int); // do we need any shared memory?
+    // sum the products within their segment
+    sgmScanInc< Add<double>,double > ( block_size, d_size, d_tmp_pairs, d_flags, d_tmp_sscan );
+   
+    // sum ( scan (+) 0 ) the flags to calculate indexes of results
+    scanInc< Add<double>,double > ( block_size, d_size, d_flags, d_tmp_idxs );
+    
+    // write to the output array
+    write_lastSgmElem(d_tmp_sscan, d_tmp_idxs, d_flags, d_size, d_out);
 
-    double tmp = num_blocks * sh_mem_size;
-    printf("%d lala",tmp);
-    // copy the values over in an array of the type needed to perform the calculations
-    //createMyInt4Kernel<<< num_blocks, block_size, sh_mem_size >>>(d_in, d_myint, d_size);
+    // clean up newly created arrays on device
+    cudaFree(d_tmp_pairs);
+    cudaFree(d_tmp_sscan);
 
 }
 
