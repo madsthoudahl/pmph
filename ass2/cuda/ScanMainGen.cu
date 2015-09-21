@@ -6,7 +6,7 @@
 #include "ScanHost.cu.h"
 
 #define EPS 0.0005
-#define NUM_THREADS 898
+#define NUM_THREADS 987624
 #define BLOCK_SIZE 512
 
 
@@ -40,10 +40,6 @@ int msspTest(){
         // test the wrapper
         result = maxSegmentSum ( block_size, num_threads, d_in );
         
-
-        // copy device memory to host 
-        // cudaMemcpy(h_out, d_out, mem_size_int, cudaMemcpyDeviceToHost);
-
         // cleanup memory
         cudaFree(d_in );
     }
@@ -51,92 +47,18 @@ int msspTest(){
     gettimeofday(&t_end, NULL);
     timeval_subtract(&t_diff, &t_end, &t_start);
     elapsed = (t_diff.tv_sec*1e6+t_diff.tv_usec); 
-    printf("Wrapper: MaximumSegmentSum on GPU runs in: %lu microsecs\n", elapsed);
+    printf("MaximumSegmentSum on GPU runs in: %lu microsecs", elapsed);
 
     // validation
     bool success = (result == NUM_THREADS);
-    if (success) printf("\nWrapper: MSS +   VALID RESULT! %d\n",result);
-    else         printf("\nWrapper: MSS + INVALID RESULT! %d should be %d\n",result, NUM_THREADS);
-    printf("Wrapper: Largest Valid int is: %d\n",INT_MAX);
+    if (success) printf("\nMSS +   VALID RESULT! %d\n",result);
+    else         printf("\nMSS + INVALID RESULT! %d should be %d\n",result, NUM_THREADS);
 
     // cleanup memory
     free(h_in );
 
     return result;
 }
-/*
-// deprecated
-int mssTest(){
-    const unsigned int num_threads = NUM_THREADS;
-    const unsigned int block_size  = BLOCK_SIZE;
-    unsigned int mem_size_int = num_threads * sizeof(int);
-    unsigned int mem_size_myint = num_threads * sizeof(MyInt4);
-
-    int* h_in    = (int*) malloc(mem_size_int);
-    int* h_out   = (int*) malloc(mem_size_int);
-
-    { // init segments and flags
-        for(unsigned int i=0; i<num_threads; i++) {
-            h_in   [i] = 1; 
-        }
-    }
-
-    unsigned long int elapsed;
-    struct timeval t_start, t_end, t_diff;
-    gettimeofday(&t_start, NULL); 
-
-
-    { // calling exclusive (segmented) scan
-        int* d_in, *d_out;
-        MyInt4* d_calc, *d_myint;
-        cudaMalloc((void**)&d_in ,    mem_size_int);
-        cudaMalloc((void**)&d_out ,   mem_size_int);
-        cudaMalloc((void**)&d_myint,  mem_size_myint);
-        cudaMalloc((void**)&d_calc,   mem_size_myint);
-        //cudaMalloc((void**)&d_out,    sizeof(int));
-
-        // copy host memory to device
-        cudaMemcpy(d_in, h_in, mem_size_int, cudaMemcpyHostToDevice);
-
-        { // execute kernels
-            // copy the values to a 4-tuple datastructure to support the calculations needed
-            createMyInt4array(block_size, num_threads, d_in, d_myint);
-            // Use a Scan Inclusive with special MssOP operation on array
-            scanInc< MsspOp, MyInt4 > ( block_size, num_threads, d_myint, d_calc );
-	    // extract the last element of the calculation which hold the result
-            extractLastAsInt( block_size, num_threads, d_calc, d_out ); // d_in should be d_out?
-        }
-
-        // copy device memory to host 
-        cudaMemcpy(h_out, d_out, mem_size_int, cudaMemcpyDeviceToHost);
-
-        // cleanup memory
-        cudaFree(d_in );
-        cudaFree(d_out);
-        cudaFree(d_myint);
-        cudaFree(d_calc);
-    }
-
-    gettimeofday(&t_end, NULL);
-    timeval_subtract(&t_diff, &t_end, &t_start);
-    elapsed = (t_diff.tv_sec*1e6+t_diff.tv_usec); 
-    printf("MaximumSegmentSum on GPU runs in: %lu microsecs\n", elapsed);
-
-    // validation
-    bool success = (h_out[0] == NUM_THREADS);
-    if (success) printf("\nMSS +   VALID RESULT! %d\n",h_out[0]);
-    else         printf("\nMSS + INVALID RESULT! %d should be %d\n",h_out[0], NUM_THREADS);
-    printf("Largest Valid int is: %d\n",INT_MAX);
-
-    //printf("mss cleanup %d \n", BLOCK_SIZE );
-    // cleanup memory
-    free(h_in );
-    free(h_out );
-
-    //printf("mss exiting %d \n", BLOCK_SIZE );
-    return 0;
-}
-*/
 
 
 int scanExcTest(bool is_segmented) {
@@ -240,32 +162,31 @@ int scanExcTest(bool is_segmented) {
 
 
 
-int smvmTest(  const int    SIZE = 10,
-               const int    MAT_ROWS = 4,
-               const int    MAT_COLS = 4,
-               const int    VEC_LEN  = 4,
-               const int[]  h_mat_flags   = {1,0,1,0,0,1,0,0,1,0},
-               const int    h_mat_idxs[]  = {0,1,0,1,2,1,2,3,2,3},
-               const float  h_mat_vals[]  = {2.0, -1.0, -1.0, 2.0, -1.0, -1.0, 2.0, -1.0, -1.0, 2.0},
-               const float  h_vec_vals[]     = {2.0, 1.0, 0.0, 3.0},
-               const float  res[]            = {3.0,0.0,-4.0,6.0} // [(2*2-1*1), (-1*2+2*1), (-1*1-1*3),(2*3)]
-) {
+int smvmTest() {
+    const int    SIZE          = 10;
+    const int    MAT_COLS      = 4;
+    const int    VEC_LEN       = 4;
+    const int    h_mat_flags[] = {1,0,1,0,0,1,0,0,1,0};
+    const int    h_mat_idxs[]  = {0,1,0,1,2,1,2,3,2,3};
+    const float  h_mat_vals[]  = {2.0, -1.0, -1.0, 2.0, -1.0, -1.0, 2.0, -1.0, -1.0, 2.0};
+    const float  h_vec_vals[]  = {2.0, 1.0, 0.0, 3.0};
+    const float  res[]         = {3.0,0.0,-4.0,6.0}; // [(2*2-1*1), (-1*2+2*1), (-1*1-1*3),(2*3)]
 
-    if (MAT_ROWS != VEC_LEN) return -1;      // Matrix and vector not aligned
+    if (MAT_COLS != VEC_LEN) return -1;      // Matrix and vector not aligned
 
     const unsigned int num_threads = SIZE;
     const unsigned int block_size  = BLOCK_SIZE;
     unsigned int mem_size_float = num_threads * sizeof(float);
-    unsigned int mem_size_result = MAT_ROWS * sizeof(float);  
+    unsigned int mem_size_result = MAT_COLS * sizeof(float);  
     unsigned int mem_size_int    = num_threads * sizeof(int);
 
-    int    * h_in_mf  = (int*) malloc(mem_size_result);
-    int    * h_in_mi  = (int*) malloc(mem_size_result);
-    float  * h_in_mv  = (float*) malloc(mem_size_result);
-    float  * h_in_vv  = (float*) malloc(mem_size_result);
-    float  * h_out    = (float  *) malloc(mem_size_result);
+    int    * h_in_mf  = (int*) malloc(mem_size_int);
+    int    * h_in_mi  = (int*) malloc(mem_size_int);
+    float  * h_in_mv  = (float*) malloc(mem_size_float);
+    float  * h_in_vv  = (float*) malloc(mem_size_float);
+    float  * h_out    = (float*) malloc(mem_size_result);
 
-    for (i=0; i<SIZE; i++) {
+    for (int i=0; i<SIZE; i++) {
         h_in_mf[i] = h_mat_flags[i];
         h_in_mi[i] = h_mat_idxs[i];
         h_in_mv[i] = h_mat_vals[i];
@@ -277,13 +198,12 @@ int smvmTest(  const int    SIZE = 10,
     gettimeofday(&t_start, NULL); 
 
     {
-        float  *d_in_mv, *d_in_vv, *d_tmp, *d_out;
+        float  *d_in_mv, *d_in_vv, *d_out;
         int *d_in_mf, *d_in_mi;
         cudaMalloc((void**)&d_in_mf ,   mem_size_int);
         cudaMalloc((void**)&d_in_mi ,   mem_size_int);
         cudaMalloc((void**)&d_in_mv ,   mem_size_float);
         cudaMalloc((void**)&d_in_vv ,   mem_size_float);
-        //cudaMalloc((void**)&d_tmp   ,   mem_size_float);
         cudaMalloc((void**)&d_out   ,   mem_size_result);
 
         // copy host memory to device
@@ -293,10 +213,8 @@ int smvmTest(  const int    SIZE = 10,
         cudaMemcpy(d_in_vv, h_in_vv, mem_size_float, cudaMemcpyHostToDevice);
 
         // execute 'host' library function
-	spMatVecMul(block_size, num_threads, d_in_mf, d_in_mi, d_in_mv, d_in_vv, d_out );
+	spMatVecMult(block_size, num_threads, d_in_mf, d_in_mi, d_in_mv, d_in_vv, d_out );
 
-        spMatVctMul_pairs<<<num_blocks, block_size>>>(d_in_mi, d_in_mv, d_in_vv, SIZE, d_tmp);
-	sgmScanInc< Add<int>,int > ( block_size, num_threads, d_in, flags_d, d_out );
         // copy device memory to host
         cudaMemcpy(h_out, d_out, mem_size_result, cudaMemcpyDeviceToHost);
 
@@ -311,26 +229,27 @@ int smvmTest(  const int    SIZE = 10,
     gettimeofday(&t_end, NULL);
     timeval_subtract(&t_diff, &t_end, &t_start);
     elapsed = (t_diff.tv_sec*1e6+t_diff.tv_usec); 
-    char segmented = ' ';
-    if (is_segmented) segmented = 's';
-    printf("%cScan Inclusive on GPU runs in: %lu microsecs", segmented, elapsed);
+    printf("sparse Matrix-Vector multiplication on GPU runs in: %lu microsecs", elapsed);
 
     // validation
     bool success = true;
-    for(int i=0; i<ROW_SIZE; i++){
-        succes &= abs(h_out[i]-res[i])<ABS
+    for(int i=0; i<MAT_COLS; i++){
+        success &= abs(h_out[i]-res[i])<EPS;
     }        
-
-    if(success) resstring = "  VALID";
-    else        resstring = "INVALID";
     
-    printf("\nSparseMatrix Vector Multiplication : %s RESULT\n",resstring);
-    printf("\f.2 \f.2 \f.2 \f.2", res[0], res[1],  res[2], res[3]);
-    printf("\f.2 \f.2 \f.2 \f.2", h_out[0], h_out[1],  h_out[2], h_out[3]);
+    printf("\nSparseMatrix Vector Multiplication Result:\n");
+    printf("[ %f %f %f %f ] - calculation\n", res[0], res[1],  res[2], res[3]);
+    printf("[ %f %f %f %f ] - correct result\n", h_out[0], h_out[1],  h_out[2], h_out[3]);
 
+    if(success) printf("VALID RESULT");
+    else        printf("INVALID RESULT");
     
     // cleanup memory
-    // STATIC LOCAL ALLOCATIONS at host level
+    free( h_in_mf);
+    free( h_in_mi);
+    free( h_in_mv);
+    free( h_in_vv);
+    free( h_out  ); 
 
     return 0;
 }
@@ -436,7 +355,6 @@ int main(int argc, char** argv) {
     scanIncTest(true);
     scanExcTest(false);
     scanExcTest(true);
-    //mssTest();
     msspTest();
     smvmTest();
 }
