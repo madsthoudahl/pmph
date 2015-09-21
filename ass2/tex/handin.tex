@@ -16,8 +16,15 @@
 \maketitle
 
 To improve readability of my solutions, some extra pages have been used although not utilized to its capacity.
+Sorry for the late handin, but i wanted to be able to include any reporting issues pointed out in the feedback from the first assignment... And as i have small children, not all of my weekend can be reserved..
 
+
+
+\vfill
 \section{CUDA Programming with reduce and Segmented Scan}
+
+
+\vfill
 \subsection{Task 1 Implement ExclusiveScan and SegmentedExclusiveScan}
 By using the already implemented \texttt{ScanInclusive} code, the algorithm will look something like this:
 
@@ -30,8 +37,9 @@ By using the already implemented \texttt{ScanInclusive} code, the algorithm will
 \end{verbatim}
 
 The attached code compiles and runs, and does indeed test the (segmented)ScanExclusive implementation.
+\vfill
 
-
+\newpage
 
 \subsection{Task 2 - Implement MaximumSegmentSum problem}
 Algorithm implemented:
@@ -47,10 +55,13 @@ As I had a bit of inconvenience using scalar int type, while implementing, I cho
 
 \begin{verbatim}
 from ScanKernels.cu.h
-__global__ void
-createMyInt4Kernel(int* d_in, MyInt4* d_out, unsigned int d_size) {
+msspTrivialMap(int* inp_d, MyInt4* inp_lift, int inp_size) {
     const unsigned int gid = blockIdx.x*blockDim.x + threadIdx.x;
-    if (gid < d_size)  d_out[gid] = MyInt4( d_in[gid], d_in[gid], d_in[gid], d_in[gid]);
+    if(gid < inp_size) {
+        int x = inp_d[gid];
+        if ( x > 0 ) inp_lift[gid] = MyInt4 ( x, x, x, x);
+        else inp_lift[gid] = MyInt4 ( 0, 0, 0, x);
+    }
 }
 
 class MsspOp {
@@ -64,11 +75,10 @@ class MsspOp {
 };
 \end{verbatim}
 See attached code for further insights
-
 Code runs and successfully tests the quite boring array [1,1,1,1,..] where \texttt{mss=n} and n is length of array.
 
 
-
+\newpage
 \subsection{Task 3 - Implement Sparse Vector Matrix Multiplication in CUDA}
 
 \subsubsection{Nested implementation in haskell}
@@ -113,12 +123,62 @@ Some difficulties making the last part compile, writing to an array, but the ide
 
 The challenge i have not been able to overcome is converting the \texttt{flags} list to a \texttt{sizes} list e.g. [1,0,1,0,0,1,0,0,0] $\rightarrow$ [2,0,3,0,0,4,0,0,0], having the \texttt{rowsizes} failing, thus missing that part in succeeding.
 
+\newpage
 \subsubsection{flattened implementation in cuda}
-See attached code in files \texttt{sparsevectmult.cu}
+Some important parts of the code is presented here, the code in its entirety is attached.
 
+As it turns out, all the map operations of finding out which vector indices and what matrice entries to multiply them with are resolved in \texttt{spMatVctMult\_pairs} function below.
+The summation (reduction) is produced by a segmented inclusive scan op:(+) ne:$0$ function, handling all Matrix columns in parallel, very smooth. Last part sorts out where the results are hiding and digs them out of the scanned array.
+\begin{verbatim}
+spMatVctMult_pairs(int* mat_inds, float* mat_vals, float* vct, int tot_size, float* tmp_pairs) {
+    const unsigned int gid = blockIdx.x*blockDim.x + threadIdx.x;
+    if(gid < tot_size) {
+        tmp_pairs[gid] = vct[ mat_inds[gid] ] * mat_vals[gid];
+    }
+}
 
+write_lastSgmElem(float* tmp_scan, int* tmp_inds, int* flags_d, int tot_size, float* vct_res) {
+    const unsigned int gid = blockIdx.x*blockDim.x + threadIdx.x;
+    if(gid < tot_size) {
+        if ( flags_d[gid+1] != 0 )     // all but the last dotproduct
+            vct_res[tmp_inds[gid]-1] = tmp_scan[gid];
+    } else if (gid == (tot_size-1)) {  // the last dotproduct
+            vct_res[tmp_inds[gid]-1] = tmp_scan[gid];
+    }
+}
+\end{verbatim}
+The writing back to the correct locations is far easier in the imperative cuda language than in Haskell, which caused the trouble in the previous part of this task. The implementation of \texttt{write\_lastSgmElem} fixes it.
 
+\begin{tabular}{l|cc|r}
+The three steps & Depth & Work & Comment\\ \hline
+multiplication of pairs into product array & $\mathcal{O}(N)$ & $\mathcal{O}(N)$ & some memory transactions may be improved \\
+segmented scan of product array & $\mathcal{O}(N)$ & $\mathcal{O}(N)$ & \\
+locating and writing back results & $\mathcal{O}(P)$ & $\mathcal{O}(N)$ & easier than haskell \\ \hline
+\end{tabular}
 
+Output when run
+\begin{verbatim}
+ ./sgmScanInc
+sScan Inclusive on GPU runs in: 1371459 microsecs
+sScan Inclusive +   VALID RESULT!
+ Scan Inclusive on GPU runs in: 8395 microsecs
+ Scan Inclusive +   VALID RESULT!
+sScan Inclusive on GPU runs in: 8108 microsecs
+sScan Inclusive +   VALID RESULT!
+ Scan Exclusive on GPU runs in: 7846 microsecs
+ Scan Exclusive +   VALID RESULT!
+sScan Exclusive on GPU runs in: 8202 microsecs
+sScan Exclusive +   VALID RESULT!
+MaximumSegmentSum on GPU runs in: 4549 microsecs
+MSS +   VALID RESULT! 987624
+Performing sparse Matrix vector multiplicationsparse Matrix-Vector multiplication on GPU runs in: 302 microsecs
+SparseMatrix Vector Multiplication Result:
+[ 3.000000 0.000000 -4.000000 6.000000 ] - calculation
+[ 3.000000 0.000000 -4.000000 6.000000 ] - correct result
+\end{verbatim}
+The results are tested, and seems to work, so proof of concept... but no timing and comparison of sequential implementation of the like of a matrix multiplication application in this handin.
+
+A bit odd that the first run (scaninc) allways seem very slow.. is it normal?? some initialization problem? 
 
 
 
