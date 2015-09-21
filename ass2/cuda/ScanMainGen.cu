@@ -240,51 +240,57 @@ int scanExcTest(bool is_segmented) {
 
 
 
-int smvmTest() {
-    const int    SIZE = 10;
-    const int    MAT_ROWS = 4;
-    const int    MAT_COLS = 4;
-    const int    VEC_LEN  = 4;
-    const int    h_mat_flags[SIZE] = [1,0,1,0,0,1,0,0,1,0];
-    const int    h_mat_idxs[SIZE]  = [0,1,0,1,2,1,2,3,2,3];
-    const double h_mat_vals[SIZE]  = [2.0, -1.0, -1.0, 2.0, -1.0, -1.0, 2.0, -1.0, -1.0, 2.0];
-    const double h_vec_vals[4]  = [2.0, 1.0, 0.0, 3.0];
-    const double res[4] = [3.0,0.0,-4.0,6.0] // [(2*2-1*1), (-1*2+2*1), (-1*1-1*3),(2*3)]
+int smvmTest(  const int    SIZE = 10,
+               const int    MAT_ROWS = 4,
+               const int    MAT_COLS = 4,
+               const int    VEC_LEN  = 4,
+               const int[]  h_mat_flags   = {1,0,1,0,0,1,0,0,1,0},
+               const int    h_mat_idxs[]  = {0,1,0,1,2,1,2,3,2,3},
+               const float  h_mat_vals[]  = {2.0, -1.0, -1.0, 2.0, -1.0, -1.0, 2.0, -1.0, -1.0, 2.0},
+               const float  h_vec_vals[]     = {2.0, 1.0, 0.0, 3.0},
+               const float  res[]            = {3.0,0.0,-4.0,6.0} // [(2*2-1*1), (-1*2+2*1), (-1*1-1*3),(2*3)]
+) {
 
     if (MAT_ROWS != VEC_LEN) return -1;      // Matrix and vector not aligned
 
     const unsigned int num_threads = SIZE;
     const unsigned int block_size  = BLOCK_SIZE;
-    unsigned int mem_size_double = num_threads * sizeof(double);
-    unsigned int mem_size_result = MAT_ROWS * sizeof(double);  
+    unsigned int mem_size_float = num_threads * sizeof(float);
+    unsigned int mem_size_result = MAT_ROWS * sizeof(float);  
     unsigned int mem_size_int    = num_threads * sizeof(int);
 
-    int*    h_in_mf  = &h_mat_flags;
-    int*    h_in_mi  = &h_mat_idxs;
-    double* h_in_mv  = &h_mat_vals;
-    double* h_in_vv  = &h_vec_vals;
-    double* h_out    = (double*) malloc(mem_size_result);
+    int    * h_in_mf  = (int*) malloc(mem_size_result);
+    int    * h_in_mi  = (int*) malloc(mem_size_result);
+    float  * h_in_mv  = (float*) malloc(mem_size_result);
+    float  * h_in_vv  = (float*) malloc(mem_size_result);
+    float  * h_out    = (float  *) malloc(mem_size_result);
 
+    for (i=0; i<SIZE; i++) {
+        h_in_mf[i] = h_mat_flags[i];
+        h_in_mi[i] = h_mat_idxs[i];
+        h_in_mv[i] = h_mat_vals[i];
+        h_in_vv[i] = h_vec_vals[i];
+    }
 
     unsigned long int elapsed;
     struct timeval t_start, t_end, t_diff;
     gettimeofday(&t_start, NULL); 
 
     {
-        double *d_in_mv, *d_in_vv, *d_tmp, *d_out;
+        float  *d_in_mv, *d_in_vv, *d_tmp, *d_out;
         int *d_in_mf, *d_in_mi;
         cudaMalloc((void**)&d_in_mf ,   mem_size_int);
         cudaMalloc((void**)&d_in_mi ,   mem_size_int);
-        cudaMalloc((void**)&d_in_mv ,   mem_size_double);
-        cudaMalloc((void**)&d_in_vv ,   mem_size_double);
-        //cudaMalloc((void**)&d_tmp   ,   mem_size_double);
+        cudaMalloc((void**)&d_in_mv ,   mem_size_float);
+        cudaMalloc((void**)&d_in_vv ,   mem_size_float);
+        //cudaMalloc((void**)&d_tmp   ,   mem_size_float);
         cudaMalloc((void**)&d_out   ,   mem_size_result);
 
         // copy host memory to device
         cudaMemcpy(d_in_mf, h_in_mf, mem_size_int, cudaMemcpyHostToDevice);
         cudaMemcpy(d_in_mi, h_in_mi, mem_size_int, cudaMemcpyHostToDevice);
-        cudaMemcpy(d_in_mv, h_in_mv, mem_size_double, cudaMemcpyHostToDevice);
-        cudaMemcpy(d_in_vv, h_in_vv, mem_size_double, cudaMemcpyHostToDevice);
+        cudaMemcpy(d_in_mv, h_in_mv, mem_size_float, cudaMemcpyHostToDevice);
+        cudaMemcpy(d_in_vv, h_in_vv, mem_size_float, cudaMemcpyHostToDevice);
 
         // execute 'host' library function
 	spMatVecMul(block_size, num_threads, d_in_mf, d_in_mi, d_in_mv, d_in_vv, d_out );

@@ -256,7 +256,7 @@ int maxSegmentSum(  unsigned int block_size, // block size chosen
                     d_size / block_size     :
                     d_size / block_size + 1 ;
 
-    //unsigned int mem_size_double = d_size * sizeof(double);
+    //unsigned int mem_size_float = d_size * sizeof(float);
     unsigned int mem_size_myint = d_size * sizeof(MyInt4);
 
     MyInt4 *h_result = (MyInt4*) malloc(sizeof(MyInt4));
@@ -291,34 +291,34 @@ void spMatVecMult(      unsigned int block_size,// size of each block used on th
                         unsigned int d_size,    // total number of entries in matrix
                         int*         d_flags,   // device
                         int*         d_mat_idx, // device
-			double*      d_mat_val, // device
-                        double*      d_vec_val, // device
-		        double*      d_out      // device
+			float*      d_mat_val, // device
+                        float*      d_vec_val, // device
+		        float*      d_out      // device
 ) {
     unsigned int num_blocks;
     num_blocks = ( (d_size % block_size) == 0) ?
                     d_size / block_size     :
                     d_size / block_size + 1 ;
     
-    double *d_tmp_pairs *d_tmp_sscan;
+    float*d_tmp_pairs, *d_tmp_sscan;
     int *d_tmp_idxs;
-    cudaMalloc((void**)&d_tmp_pairs, sizeof(double) * d_size);
-    cudaMalloc((void**)&d_tmp_sscan, sizeof(double) * d_size);
+    cudaMalloc((void**)&d_tmp_pairs, sizeof(float) * d_size);
+    cudaMalloc((void**)&d_tmp_sscan, sizeof(float) * d_size);
     cudaMalloc((void**)&d_tmp_idxs , sizeof(int) * d_size);
     
     printf("Performing sparse Matrix vector multiplication");
     
     // calculate array of products
-    spMatVctMul_pairs<<<num_blocks, block_size>>>(d_mat_idx, d_mat_val, d_vec_val, d_size, d_tmp_pairs);
+    spMatVctMult_pairs<<<num_blocks, block_size>>>(d_mat_idx, d_mat_val, d_vec_val, d_size, d_tmp_pairs);
 
     // sum the products within their segment
-    sgmScanInc< Add<double>,double > ( block_size, d_size, d_tmp_pairs, d_flags, d_tmp_sscan );
+    sgmScanInc< Add<float>,float> ( block_size, d_size, d_tmp_pairs, d_flags, d_tmp_sscan );
    
     // sum ( scan (+) 0 ) the flags to calculate indexes of results
-    scanInc< Add<double>,double > ( block_size, d_size, d_flags, d_tmp_idxs );
+    scanInc< Add<int>,int> ( block_size, d_size, d_flags, d_tmp_idxs );
     
     // write to the output array
-    write_lastSgmElem(d_tmp_sscan, d_tmp_idxs, d_flags, d_size, d_out);
+    write_lastSgmElem<<< num_blocks, block_size >>>(d_tmp_sscan, d_tmp_idxs, d_flags, d_size, d_out);
 
     // clean up newly created arrays on device
     cudaFree(d_tmp_pairs);
