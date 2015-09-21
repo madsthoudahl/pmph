@@ -316,7 +316,9 @@ __global__ void
 msspTrivialMap(int* inp_d, MyInt4* inp_lift, int inp_size) {
     const unsigned int gid = blockIdx.x*blockDim.x + threadIdx.x;
     if(gid < inp_size) {
-        // ... TODO fill in the blanks ...
+        int x = inp_d[gid];
+        if ( x > 0 ) inp_lift[gid] = MyInt4 ( x, x, x, x);
+        else inp_lift[gid] = MyInt4 ( 0, 0, 0, x);
     }
 }
 
@@ -333,8 +335,7 @@ __global__ void
 spMatVctMult_pairs(int* mat_inds, float* mat_vals, float* vct, int tot_size, float* tmp_pairs) {
     const unsigned int gid = blockIdx.x*blockDim.x + threadIdx.x;
     if(gid < tot_size) {
-        v_idx = mat_inds[gid]
-        tmp_pairs[gid] = vct[v_idx] * mat_vals[gid];
+        tmp_pairs[gid] = vct[ mat_inds[gid] ] * mat_vals[gid];
     }
 }
 
@@ -357,7 +358,10 @@ __global__ void
 write_lastSgmElem(float* tmp_scan, int* tmp_inds, int* flags_d, int tot_size, float* vct_res) {
     const unsigned int gid = blockIdx.x*blockDim.x + threadIdx.x;
     if(gid < tot_size) {
-        // TODO ... fill in the blanks ...
+        if ( flags_d[gid+1] != 0 )     // all but the last dotproduct
+            vct_res[tmp_inds[gid]-1] = tmp_scan[gid];
+    } else if (gid == (tot_size-1)) {  // the last dotproduct
+               vct_res[tmp_inds[gid]-1] = tmp_scan[gid];
     }
 }
 

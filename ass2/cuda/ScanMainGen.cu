@@ -6,9 +6,66 @@
 #include "ScanHost.cu.h"
 
 #define EPS 0.0005
-#define NUM_THREADS 8963448
+#define NUM_THREADS 898
 #define BLOCK_SIZE 512
 
+
+int msspTest(){
+// using msspTest as a wrapper for one function in ScanHost.cu.h
+    const unsigned int num_threads = NUM_THREADS;
+    const unsigned int block_size  = BLOCK_SIZE;
+    unsigned int mem_size_int = num_threads * sizeof(int);
+
+    int* h_in    = (int*) malloc(mem_size_int);
+    int result;
+
+    { // init segments and flags
+        for(unsigned int i=0; i<num_threads; i++) {
+            h_in   [i] = 1; 
+        }
+    }
+
+    unsigned long int elapsed;
+    struct timeval t_start, t_end, t_diff;
+    gettimeofday(&t_start, NULL); 
+
+
+    { // calling exclusive (segmented) scan
+        int* d_in;
+        cudaMalloc((void**)&d_in ,    mem_size_int);
+
+        // copy host memory to device
+        cudaMemcpy(d_in, h_in, mem_size_int, cudaMemcpyHostToDevice);
+
+        // test the wrapper
+        result = maxSegmentSum ( block_size, num_threads, d_in );
+        
+
+        // copy device memory to host 
+        // cudaMemcpy(h_out, d_out, mem_size_int, cudaMemcpyDeviceToHost);
+
+        // cleanup memory
+        cudaFree(d_in );
+    }
+
+    gettimeofday(&t_end, NULL);
+    timeval_subtract(&t_diff, &t_end, &t_start);
+    elapsed = (t_diff.tv_sec*1e6+t_diff.tv_usec); 
+    printf("Wrapper: MaximumSegmentSum on GPU runs in: %lu microsecs\n", elapsed);
+
+    // validation
+    bool success = (result == NUM_THREADS);
+    if (success) printf("\nWrapper: MSS +   VALID RESULT! %d\n",result);
+    else         printf("\nWrapper: MSS + INVALID RESULT! %d should be %d\n",result, NUM_THREADS);
+    printf("Wrapper: Largest Valid int is: %d\n",INT_MAX);
+
+    // cleanup memory
+    free(h_in );
+
+    return result;
+}
+/*
+// deprecated
 int mssTest(){
     const unsigned int num_threads = NUM_THREADS;
     const unsigned int block_size  = BLOCK_SIZE;
@@ -17,7 +74,6 @@ int mssTest(){
 
     int* h_in    = (int*) malloc(mem_size_int);
     int* h_out   = (int*) malloc(mem_size_int);
-    //int* h_out   = (int*) malloc(sizeof(int));
 
     { // init segments and flags
         for(unsigned int i=0; i<num_threads; i++) {
@@ -68,15 +124,19 @@ int mssTest(){
 
     // validation
     bool success = (h_out[0] == NUM_THREADS);
-    if (success) printf("\nMSS +   VALID RESULT! %d\n",h_out);
-    else         printf("\nMSS + INVALID RESULT! %d should be %d\n",h_out, NUM_THREADS);
+    if (success) printf("\nMSS +   VALID RESULT! %d\n",h_out[0]);
+    else         printf("\nMSS + INVALID RESULT! %d should be %d\n",h_out[0], NUM_THREADS);
     printf("Largest Valid int is: %d\n",INT_MAX);
 
+    //printf("mss cleanup %d \n", BLOCK_SIZE );
     // cleanup memory
     free(h_in );
+    free(h_out );
 
+    //printf("mss exiting %d \n", BLOCK_SIZE );
     return 0;
 }
+*/
 
 
 int scanExcTest(bool is_segmented) {
@@ -167,10 +227,12 @@ int scanExcTest(bool is_segmented) {
     else        printf("\n%cScan Exclusive + INVALID RESULT!\n",segmented);
 
 
+    //printf("scanEx memcleanup %d \n", BLOCK_SIZE );
     // cleanup memory
     free(h_in );
     free(h_out);
     free(flags_h);
+    //printf("scanEx exiting %d \n", BLOCK_SIZE );
 
     return 0;
 }
@@ -277,4 +339,5 @@ int main(int argc, char** argv) {
     scanExcTest(false);
     scanExcTest(true);
     mssTest();
+    msspTest();
 }

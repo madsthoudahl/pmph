@@ -15,40 +15,8 @@ int timeval_subtract(struct timeval *result, struct timeval *t2, struct timeval 
     return (diff<0);
 }
 
-void createMyInt4array( unsigned int block_size, 
-                        unsigned int d_size, 
-                        int*         d_in,      // device
-                        MyInt4*      d_myint    // device
-) {
-    unsigned int num_blocks;
-    num_blocks = ( (d_size % block_size) == 0) ?
-                    d_size / block_size     :
-                    d_size / block_size + 1 ;
 
-    unsigned int sh_mem_size = block_size * sizeof(MyInt4); // ? enough ?
 
-    // copy the values over in an array of the type needed to perform the calculations
-    createMyInt4Kernel<<< num_blocks, block_size, sh_mem_size >>>(d_in, d_myint, d_size);
-
-}
-
-void extractLastAsInt(  unsigned int block_size, 
-                        unsigned int d_size, 
-                        MyInt4*      d_in,      // device
-                        int*         d_out      // device
-) {
-    unsigned int num_blocks;
-    num_blocks = ( (d_size % block_size) == 0) ?
-                    d_size / block_size     :
-                    d_size / block_size + 1 ;
-    unsigned int sh_mem_size = block_size * sizeof(MyInt4); // ? enough ?
-
-    extractLastKernel<<<num_blocks, block_size, sh_mem_size>>>(d_in, d_out, d_size);
-
-}
-    // Use a ScanInclusive (MssOP) operation on the array to calculate the maximum segment sum
-    // Extract the last value from the array and return it
-//	extractLast<int>( block_size, num_threads, d_calc, d_out );
 
 
 /**
@@ -273,4 +241,71 @@ void sgmScanInc( const unsigned int  block_size,
     cudaFree(f_rec_in );
     cudaFree(f_inds   );
 }
+
+
+
+
+
+
+int maxSegmentSum(  unsigned int block_size, // block size chosen
+                    unsigned int d_size,     // size of calculation
+                    int* d_in                // device memory pointer to input array
+) {
+    unsigned int num_blocks;
+    num_blocks = ( (d_size % block_size) == 0) ?
+                    d_size / block_size     :
+                    d_size / block_size + 1 ;
+
+    //unsigned int mem_size_double = d_size * sizeof(double);
+    unsigned int mem_size_myint = d_size * sizeof(MyInt4);
+
+    MyInt4 *h_result = (MyInt4*) malloc(sizeof(MyInt4));
+    MyInt4 *d_myint, *d_calc;
+
+    cudaMalloc((void**)&d_myint, mem_size_myint);
+    cudaMalloc((void**)&d_calc, mem_size_myint);
+
+    // copy the values to a 4-tuple datastructure to support the calculations needed
+    msspTrivialMap<<<num_blocks, block_size>>>(d_in, d_myint, d_size);
+
+    // Use a Scan Inclusive with special MssOP operation on array
+    scanInc< MsspOp, MyInt4 > ( block_size, d_size, d_myint, d_calc );
+
+    // extract the last element of the calculation which hold the result 
+    // Copy result back into host memory from device, or address pointed to will be wrong!
+    cudaMemcpy( h_result, &d_calc[d_size-1], sizeof(MyInt4), cudaMemcpyDeviceToHost);
+    int h_res = h_result[0].x;
+
+    cudaFree(d_myint);
+    cudaFree(d_calc);
+
+
+    return h_res;
+}
+
+
+
+
+
+void spMatVecMult(      unsigned int block_size,// size of each block used on the device 
+                        unsigned int d_size,    // total number of entries in matrix
+                        int*         d_flags_in,// device
+                        int*         d_mat_in,  // device (int,double)
+                        double*      d_vec_in   // device
+) {
+    unsigned int num_blocks;
+    num_blocks = ( (d_size % block_size) == 0) ?
+                    d_size / block_size     :
+                    d_size / block_size + 1 ;
+
+    unsigned int sh_mem_size = block_size * sizeof(int); // do we need any shared memory?
+
+    double tmp = num_blocks * sh_mem_size;
+    printf("%d lala",tmp);
+    // copy the values over in an array of the type needed to perform the calculations
+    //createMyInt4Kernel<<< num_blocks, block_size, sh_mem_size >>>(d_in, d_myint, d_size);
+
+}
+
+
 #endif //SCAN_HOST
