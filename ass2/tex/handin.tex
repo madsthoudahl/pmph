@@ -150,12 +150,15 @@ write_lastSgmElem(float* tmp_scan, int* tmp_inds, int* flags_d, int tot_size, fl
 The writing back to the correct locations is far easier in the imperative cuda language than in Haskell, which caused the trouble in the previous part of this task. The implementation of \texttt{write\_lastSgmElem} fixes it.
 
 \begin{tabular}{l|cc|r}
-The three steps & Depth & Work & Comment\\ \hline
-multiplication of pairs into product array & $\mathcal{O}(N)$ & $\mathcal{O}(N)$ & some memory transactions may be improved \\
-segmented scan of product array & $\mathcal{O}(N)$ & $\mathcal{O}(N)$ & \\
-locating and writing back results & $\mathcal{O}(P)$ & $\mathcal{O}(N)$ & easier than haskell \\ \hline
+The three steps & Step Complexity & Work Complexity & Comment\\ \hline
+multiplication of pairs into product array & $\mathcal{O}(1)$ & $\mathcal{O}(N)$ & memory improveable \\
+segmented scan of product array & $\mathcal{O}(\log_2 N)$ & $\mathcal{O}(N)$ & asymptotically\\
+locating and writing back results & $\mathcal{O}(1)$ & $\mathcal{O}(N)$ & easier than haskell \\ \hline
 \end{tabular}
 
+All complexity results assumes more than $n/2$ processors, and it leaves an overall step complexity of $\mathcal{O}(\log_2 n)$
+
+\vfill
 Output when run
 \begin{verbatim}
  ./sgmScanInc
@@ -171,11 +174,12 @@ sScan Exclusive on GPU runs in: 8202 microsecs
 sScan Exclusive +   VALID RESULT!
 MaximumSegmentSum on GPU runs in: 4549 microsecs
 MSS +   VALID RESULT! 987624
-Performing sparse Matrix vector multiplicationsparse Matrix-Vector multiplication on GPU runs in: 302 microsecs
+Performing sparse Matrix vector multiplicationsparse Matrix-Vector mult. on GPU runs in: 302 microsecs
 SparseMatrix Vector Multiplication Result:
 [ 3.000000 0.000000 -4.000000 6.000000 ] - calculation
 [ 3.000000 0.000000 -4.000000 6.000000 ] - correct result
 \end{verbatim}
+\vfill
 The results are tested, and seems to work, so proof of concept... but no timing and comparison of sequential implementation of the like of a matrix multiplication application in this handin.
 
 A bit odd that the first run (scaninc) allways seem very slow.. is it normal?? some initialization problem? 
