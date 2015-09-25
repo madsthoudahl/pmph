@@ -1,8 +1,8 @@
 CXX        = nvcc
 
-SOURCES_CPP =ScanMainGen.cu
-HELPERS     =ScanHost.cu.h ScanKernels.cu.h
-EXECUTABLE  =sgmScanInc
+SOURCES_CPP =test.cu
+HELPERS     =hostlib.cu.h devlib.cu.h devkernels.cu.h
+EXECUTABLE  =test
 
 
 default: compile
