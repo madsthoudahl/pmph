@@ -24,19 +24,19 @@
 
 // declaration of functions used in main
 // ALL should be moved to hostlib and implemented there
-bool validate(float* ground_truth, float* same);    // TODO
+bool validate(int size, float* ground_truth, float* same);    
 
-int transpose_cpu(int rows_in, int cols_in, float *m_in, float *m_out);       // TODO
-int transpose_gpu_naive(int rows_in, int cols_in, float *m_in, float *m_out); // TODO
-int transpose_gpu(int rows_in, int cols_in, float *m_in, float *m_out);       // TODO
+int transpose_cpu(int rows_in, int cols_in, float *m_in, float *m_out);
+int transpose_gpu_naive(int rows_in, int cols_in, float *m_in, float *m_out);
+int transpose_gpu(int rows_in, int cols_in, float *m_in, float *m_out);
 
-int matrix_accfun_cpu(int rows_in, int cols_in, float* m_in, float* m_out_a);        // TODO 
-int matrix_accfun_gpu_first(int rows_in, int cols_in, float* m_in, float* m_out_a);  // TODO
-int matrix_accfun_gpu_second(int rows_in, int cols_in, float* m_in, float* m_out_a); // TODO
+int matrix_accfun_cpu(int rows_in, int cols_in, float* m_in, float* m_out_a);
+int matrix_accfun_gpu_first(int rows_in, int cols_in, float* m_in, float* m_out_a);
+int matrix_accfun_gpu_second(int rows_in, int cols_in, float* m_in, float* m_out_a);
 
-int matmult_cpu(int M, int U, float* m_in_a, int U, int N, float* m_in_b, float* m_out_a);     // TODO
-int matmult_gpu(int M, int U, float* m_in_a, int U, int N, float* m_in_b, float* m_out_a);     // TODO
-int matmult_gpu_opt(int M, int U, float* m_in_a, int U, int N, float* m_in_b, float* m_out_a); // TODO
+int matmult_cpu(int M, int U, float* m_in_a, int U, int N, float* m_in_b, float* m_out_a);
+int matmult_gpu(int M, int U, float* m_in_a, int U, int N, float* m_in_b, float* m_out_a);
+int matmult_gpu_opt(int M, int U, float* m_in_a, int U, int N, float* m_in_b, float* m_out_a);
 
 
 
@@ -94,13 +94,14 @@ int task_one(){
     // 1d. implement serial version
 
     // initiate data to transpose (dense matrix)
+    const int arr_size = COLS_N * ROWS_M
     float *h_in, *h_out_a, *h_out_b, *h_out_c, *h_out_d;
-    m_in = malloc(COLS_N * ROWS_M * sizeof(float));
-    m_out_a = malloc(COLS_N * ROWS_M * sizeof(float));
-    m_out_c = malloc(COLS_N * ROWS_M * sizeof(float));
-    m_out_d = malloc(COLS_N * ROWS_M * sizeof(float));
+    m_in = malloc(arr_size * sizeof(float));
+    m_out_a = malloc(arr_size * sizeof(float));
+    m_out_c = malloc(arr_size * sizeof(float));
+    m_out_d = malloc(arr_size * sizeof(float));
 
-    for (int i=0; i<(COLS_N*ROWS_M); i++){
+    for (int i=0; i<(arr_size); i++){
         m_in[i] = 0 // TODO random number
     }
 
@@ -132,7 +133,7 @@ int task_one(){
         gettimeofday(&t_end, NULL); 
         timeval_subtract(&t_diff, &t_end, &t_start);
         elapsed_c = (t_diff.tv_sec*1e6+t_diff.tv_usec); 
-	valid_c = validate(h_out_a, h_out_c);
+	valid_c = validate(arr_size, h_out_a, h_out_c);
     }
     printf("Transpose Matrix sized %d x %d on GPU naïvely runs in: %lu microsecs\n", COLS_N, ROWS_M, elapsed_c);
     if (valid_c) printf("Naïve implementation is VALID\n");
@@ -156,10 +157,10 @@ int task_one(){
 
     // TODO print statistics, speedup difference and so on
 
-    free(h_in);
-    free(h_out_a);
-    free(h_out_c);
-    free(h_out_d);
+    free(m_in);
+    free(m_out_a);
+    free(m_out_c);
+    free(m_out_d);
 
     return 0;
 }
@@ -176,13 +177,14 @@ int task_two(){
 
     // initiate data to transpose (dense matrix)
     const int m = 64;
+    const int arr_size = M2 * N2
     float *h_in, *h_out_a, *h_out_b, *h_out_c, *h_out_d;
-    m_in = malloc(M2 * N2 * sizeof(float));
-    m_out_a = malloc(M2 * N2 * sizeof(float));
-    m_out_c = malloc(M2 * N2 * sizeof(float));
-    m_out_d = malloc(M2 * N2 * sizeof(float));
+    m_in = malloc(arr_size * sizeof(float));
+    m_out_a = malloc(arr_size * sizeof(float));
+    m_out_c = malloc(arr_size * sizeof(float));
+    m_out_d = malloc(arr_size * sizeof(float));
 
-    for (int i=0; i<(M2*N2); i++){
+    for (int i=0; i<(arr_size); i++){
         m_in[i] = 0 // TODO random number
     }
 
@@ -238,10 +240,10 @@ int task_two(){
 
     // TODO print statistics, speedup difference and so on
 
-    free(h_in);
-    free(h_out_a);
-    free(h_out_c);
-    free(h_out_d);
+    free(m_in);
+    free(m_out_a);
+    free(m_out_c);
+    free(m_out_d);
 
     return 0;
 }
@@ -256,15 +258,20 @@ int task_three(){
     // 1d. implement serial version
 
     // initiate data to transpose (dense matrix)
+    const int res_size = M * N;
     float *m_in_a, *m_in_b, *m_out_a, *m_out_c, *m_out_d;
     m_in_a = malloc(M * U * sizeof(float));
     m_in_b = malloc(U * N * sizeof(float));
-    m_out_a = malloc(M * N * sizeof(float));
-    m_out_c = malloc(M * N * sizeof(float));
-    m_out_d = malloc(M * N * sizeof(float));
+    m_out_a = malloc(res_size * sizeof(float));
+    m_out_c = malloc(res_size * sizeof(float));
+    m_out_d = malloc(res_size * sizeof(float));
     
-    for (int i=0; i<(COLS_N*ROWS_M); i++){
-        m_in[i] = 0; // TODO random number
+    for (int i=0; i<(M*U); i++){
+        m_in_a[i] = 0; // TODO random number
+    }
+
+    for (int i=0; i<(U*N); i++){
+        m_in_b[i] = 0; // TODO random number
     }
 
     // initiate timing variable, keep results for validation
@@ -319,10 +326,11 @@ int task_three(){
 
     // TODO print statistics, speedup difference and so on
 
-    free(h_in);
-    free(h_out_a);
-    free(h_out_c);
-    free(h_out_d);
+    free(m_in_a);
+    free(m_in_b);
+    free(m_out_a);
+    free(m_out_c);
+    free(m_out_d);
 
     return 0;
 }

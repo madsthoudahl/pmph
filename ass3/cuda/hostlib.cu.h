@@ -6,13 +6,14 @@
 #include <sys/time.h>
 #include <time.h> 
 
+#define BLOCK_SIZE 512
 
 
 // declaration of functions used in main
 // ALL should be moved to hostlib and implemented there
-bool validate(float* ground_truth, float* same);    // TODO
+bool validate(int size, float* ground_truth, float* same);
  
-int transpose_cpu(int rows_in, int cols_in, float *m_in, float *m_out);       // TODO
+int transpose_cpu(int rows_in, int cols_in, float *m_in, float *m_out);
 int transpose_gpu_naive(int rows_in, int cols_in, float *m_in, float *m_out); // TODO
 int transpose_gpu(int rows_in, int cols_in, float *m_in, float *m_out);       // TODO
 
@@ -35,85 +36,75 @@ int timeval_subtract(struct timeval *result, struct timeval *t2, struct timeval 
     return (diff<0);
 }
 
-
-
-
-
 /**
- * block_size is the size of the cuda block (must be a multiple 
- *                of 32 less than 1025)
- * d_size     is the size of both the input and output arrays.
- * d_in       is the device array; it is supposably
- *                allocated and holds valid values (input).
- * d_out      is the output GPU array -- if you want 
- *            its data on CPU needs to copy it back to host.
+ * tests that the first *size* elements of 2 arrays are identical
  *
- * OP         class denotes the associative binary operator 
- *                and should have an implementation similar to 
- *                `class Add' in ScanUtil.cu, i.e., exporting
- *                `identity' and `apply' functions.
- * T          denotes the type on which OP operates, 
- *                e.g., float or int. 
+ * size    is the number of elements to be tested
+ * arr_a   array to be tested 
+ * arr_b   against this array
+ *
  */
-template<class T>
-void sgmShiftRight( unsigned int  block_size,
-                    unsigned long d_size, 
-                    T*            d_in,     // device
-                    T*            flags_d,  // device
-                    T*            d_out,    // device
-                    T             ne        // neutral element
-) {
-    unsigned int num_blocks;
-    unsigned int sh_mem_size = block_size * 32; //sizeof(T);
-
-    num_blocks = ( (d_size % block_size) == 0) ?
-                    d_size / block_size     :
-                    d_size / block_size + 1 ;
-
-    sgmShiftRightByOne<T><<< num_blocks, block_size, sh_mem_size >>>
-        (d_in, flags_d, d_out, ne, d_size);
-    cudaThreadSynchronize();
-    
-    return;
+bool validate(int size, float* arr_a, float* arr_b){
+    bool success = true;
+    for (int i=0; i < size; i++) {
+        success &= ( abs( arr_a[i] - arr_b[i] ) < EPSILON );
+    }
+    return success;
 }
 
 
 /**
- * block_size is the size of the cuda block (must be a multiple 
- *                of 32 less than 1025)
- * d_size     is the size of both the input and output arrays.
- * d_in       is the device array; it is supposably
- *                allocated and holds valid values (input).
- * d_out      is the output GPU array -- if you want 
- *            its data on CPU needs to copy it back to host.
  *
- * OP         class denotes the associative binary operator 
- *                and should have an implementation similar to 
- *                `class Add' in ScanUtil.cu, i.e., exporting
- *                `identity' and `apply' functions.
- * T          denotes the type on which OP operates, 
- *                e.g., float or int. 
+ * The following functions hase same input and semantics, but differs in implementation
+ * All transposes an input array 
+ *
+ * rows_in    rows in input array (cols in output array)
+ * cols_in    cols in input array (rows in output array)
+ *
+ * m_in       input matrix array
+ * m_out      output matrix array
+ *
  */
-template<class T>
-void shiftRight( unsigned int  block_size,
-                 unsigned long d_size, 
-                 T*            d_in,  // device
-                 T*            d_out, // device
-                 T             ne     // neutral element
-) {
-    unsigned int num_blocks;
-    unsigned int sh_mem_size = block_size * 32; //sizeof(T);
-
-    num_blocks = ( (d_size % block_size) == 0) ?
-                    d_size / block_size     :
-                    d_size / block_size + 1 ;
-
-    shiftRightByOne<T><<< num_blocks, block_size, sh_mem_size >>>
-        (d_in, d_out, ne, d_size);
-    cudaThreadSynchronize();
-    
-    return;
+int transpose_cpu(int rows_in, int cols_in, float *m_in, float *m_out){
+    for (row=0; row<rows_in; row++){
+        for (col=0; col<cols_in; col++) {
+            m_out[col*cols_in+row] = m_in[row*rows_in+col];
+        }
+    }
 }
+
+int transpose_gpu_naive(int rows_in, int cols_in, float *h_in, float *h_out){
+    const unsigned int d_size = rows_in * cols_in;
+    const unsigned int block_size = BLOCK_SIZE;
+    unsigned int num_blocks = ( (d_size % block_size) == 0) ?
+                                 d_size / block_size     :
+                                 d_size / block_size + 1 ;
+    
+    unsigned int sh_mem_size = block_size * 32; //sizeof(T);
+    
+    // allocate device arrays
+    float* d_ini, d_out;
+    cudaMalloc((void**)&d_in , d_size*sizeof(float));
+    cudaMalloc((void**)&d_out, d_size*sizeof(float));
+
+    // copy data to device
+    // solve problem using device
+    // copy result back from device
+    // unallocate device arrays
+    cudaFree(d_in);
+    cudaFree(d_out);
+}
+
+
+
+
+
+
+
+
+
+
+
 
 
 /**
