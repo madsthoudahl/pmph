@@ -27,7 +27,7 @@ template<class T> T sum(const unsigned int, T* );
 
 // MATRIX TRANSPOSITION (ASS3 TASK1)                                          //
 template<class T> void transpose_cpu( const unsigned int, const unsigned int, T*, T*);
-template<class T> void transpose_gpu( const unsigned int, const unsigned int, T*, T*, bool);
+template<class T> void transpose_gpu( const unsigned int, const unsigned int, T*, T*, bool naive=false);
 
 // MATRIX ACCUMULATION FUNCTION (ASS3 TASK2)                                  //
 template<class T> void matrix_accfun_cpu(const unsigned int, const unsigned int, T*, T*);       
@@ -161,7 +161,13 @@ template<class T> void transpose_gpu( const unsigned int    rows_in,
 
 
 /** MATRIX ACCUMULATION FUNCTION (ASS3 TASK2)                                  *
- *  semantics: unknown for sure...                                             *
+ *  semantics: for i from 0 to n-1  // outer loop                              *
+ *               accum  = A[i,0] * A[i,0]                                      *
+ *               B[i,0] = accum                                                *
+ *               for j from 1 to 63 // inner loop                              *
+ *                 tmpA   = A[i, j]                                            *
+ *                 accum  = sqrt(accum) + tmpA * tmpA                          *
+ *                 B[i,j] = accum                                              *
  *                                                                             *
  * The following functions hase same input and semantics,                      *
  * but differs in implementation                                               *
@@ -182,7 +188,15 @@ void matrix_accfun_cpu( int rows_in,
                         T* h_in, 
                         T* h_out
 ) {
-    printf("matrix_accfun_cpu not implemented in hostlib.cu.h"); // TODO
+    for (int i=0 ; i<rows_in ; i++) {
+        accum =  h_in[i*rows_in] * h_in[i*rows_in];
+	h_out[i*rows_in] = accum;
+	for (int j=1 ; j<cols_in ; j++ ) {
+	    tmp   = h_in[i*rows_in + j];
+	    accum = sqrt(accum) + tmp * tmp;
+	    h_out[i*rows_in + j] = accum;
+	}
+    }
     return;
 }
 
@@ -388,27 +402,25 @@ void sgmScanInc_gpu( const unsigned long size,
  *  h_in      input array in which MSS is to be found *
  *                                                    *
  */
-template<class T> T maxSegmentSum_gpu(  
-                        const unsigned int d_size,  
-                        T*                 h_in   // host 
+int maxSegmentSum_gpu( const unsigned int d_size,  
+                       int*               h_in   // host 
 ) {
     const unsigned int block_size = BLOCK_SIZE;
 
     // allocate gpu mem
-    T *d_in, res;
-    cudaMalloc((void**)&d_in, d_size*sizeof(T));
+    int *d_in, res;
+    cudaMalloc((void**)&d_in, d_size*sizeof(int));
     
     // copy input from host mem to device mem
-    cudaMemcpy( d_in, h_in, d_size*sizeof(T), cudaMemcpyHostToDevice);
+    cudaMemcpy( d_in, h_in, d_size*sizeof(int), cudaMemcpyHostToDevice);
     
     // call gpu mss result is returned directly
-    res = maxSegmentSum<T>( block_size, d_size, d_in);
+    res = maxSegmentSum( block_size, d_size, d_in);
     
     // free dev mem
     cudaFree(d_in );
 
     return res;
-
 }
 
 

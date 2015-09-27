@@ -267,9 +267,9 @@ void sgmScanInc( const unsigned int  block_size,
  * d_size        is the number of elements in the input array                  *
  * d_in          ptr to array in GPU memory to be investigated                 *
  *                                                                            */
-template<class T> maxSegmentSum( unsigned int block_size, // block size chosen
-                           unsigned int d_size,     // size of calculation
-                           T*           d_in        // device memory pointer to input array
+int maxSegmentSum( unsigned int block_size, // block size chosen
+                   unsigned int d_size,     // size of calculation
+                   T*           d_in        // device memory pointer to input array
 ) {
     unsigned int num_blocks;
     num_blocks = ( (d_size % block_size) == 0) ?
@@ -299,7 +299,7 @@ template<class T> maxSegmentSum( unsigned int block_size, // block size chosen
     cudaFree(d_myint);
     cudaFree(d_calc);
 
-    return (T) h_res;
+    return h_res;
 }
 
 
@@ -385,17 +385,18 @@ void spMatVecMult(      unsigned int block_size,// size of each block used on th
  *                                                                             *
  * T           denotes type in entries of matrices, eg. int or floats         */
 //  NAÏVE IMPLEMENTATION                                                      //
-template<class T> void transpose_naive(const unsigned int block_size, 
-                                 const unsigned int rows_in, 
-                                 const unsigned int cols_in,
-                                 T*,
-                                 T*
+template<class T> void transpose_naive( const unsigned int block_size, 
+                                        const unsigned int rows_in, 
+                                        const unsigned int cols_in,
+                                        T*,
+                                        T*
 ){
+    unsigned int d_size = rows_in * cols_in;
     unsigned int num_blocks = ( (d_size % block_size) == 0) ?
                                  d_size / block_size     :
                                  d_size / block_size + 1 ;
 
-    unsigned int sh_mem_size = block_size * sizeof(T); // USED ?? TODO
+    //unsigned int sh_mem_size = block_size * sizeof(T); // USED ?? TODO
 
     // TODO
     printf("transpose_naive in devlib.cu.h not yet implemented");

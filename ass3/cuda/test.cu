@@ -63,7 +63,7 @@ int warmup(){
     for(unsigned int i=0; i<size; i++) h_in[i] = 1;
 
     // run function on GPU
-    result = maxSegmentSum_gpu<int>( size, h_in );
+    result = maxSegmentSum_gpu( size, h_in );
     
     return result;
 }
