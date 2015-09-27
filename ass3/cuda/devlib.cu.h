@@ -3,34 +3,109 @@
 
 #include "devkernels.cu.h"
 
+/*******************************************************************************
+ * DEVICE LIBRARY FUNCTIONS - UTILIZING KERNEL FUNCTIONS                       *
+ ******************************************************************************/
+
+// (SEGMENTED) SHIFT RIGHT                                                    //
+template<class T> void ShiftRight( unsigned int, unsigned long, T*, T*, const T);
+template class<T> void sgmShiftRight( unsigned int, unsigned long, T*, T*, T*, const T);
+
+// (SEGMENTED) SCAN INCLUSIVE                                                 //
+template<class OP, class T> 
+void ScanInc( const unsigned int, const unsigned long, T*, T*);
+template<class OP, class T> 
+void sgmScanInc( const unsigned int, const unsigned long, T*, int*, T*);
+
+// MAXIMUM SEGMENT SUM                                                        //
+int maxSegmentSum( unsigned int, unsigned int, int* );
+
+// SPARSE MATRIX VECTOR MULTIPLICATION                                        //
+void spMatVecMult( unsigned int, unsigned int, int*, int*, float*, float*, float* ); 
 
 
-// DEVICE LIBRARY FUNCTIONS - UTILIZING KERNEL FUNCTIONS
+/*******************************************************************************
+ * YET TO BE IMPLEMENTED                                                       *
+ ******************************************************************************/
+
+// MATRIX TRANSPOSITION         (ASS3 TASK1)                                  //
+template<T> void transpose_naive(const unsigned int, const unsigned int, const unsigned int, T*, T*);
+template<T> void transpose_opt(const unsigned int, const unsigned int, const unsigned int, T*, T*);
+
+// MATRIX ACCUMULATION FUNCTION (ASS3 TASK2)                                  //
+template<T> 
+void matrix_accfun_first(const unsigned int, const unsigned int, const unsigned int, T*, T*);
+template<T> 
+void matrix_accfun_second(const unsigned int, const unsigned int, const unsigned int, T*, T*);
 
 
-/**
- * block_size is the size of the cuda block (must be a multiple 
- *                of 32 less than 1025)
- * d_size     is the size of both the input and output arrays.
- * d_in       is the device array; it is supposably
- *                allocated and holds valid values (input).
- * d_out      is the output GPU array -- if you want 
- *            its data on CPU needs to copy it back to host.
- *
- * OP         class denotes the associative binary operator 
- *                and should have an implementation similar to 
- *                `class Add' in ScanUtil.cu, i.e., exporting
- *                `identity' and `apply' functions.
- * T          denotes the type on which OP operates, 
- *                e.g., float or int. 
- */
+// MATRIX MULTIPLICATION        (ASS3 TASK3)                                  //
+template<T> 
+void matmult(const unsigned int, const unsigned int, const unsigned int, T*, const unsigned int, const unsigned int, T*, T* );
+template<T> 
+void matmult_opt(const unsigned int, const unsigned int, const unsigned int, T*, const unsigned int, const unsigned int, T*, T* );
+
+
+
+
+
+
+
+/*******************************************************************************
+ * ACTUAL IMPLEMENTATIONS                                                      *
+ ******************************************************************************/
+
+
+
+/** SHIFT RIGHT  (SEGMENTED)                                       *
+ *  Inserts a neutral value on initial position, and pushes every  *
+ *  element one step right, discarding the last (in every segment) *
+ *                                                                 *
+ * block_size is the size of the cuda block (must be a multiple    *
+ *                of 32 less than 1025)                            *
+ * d_size     is the size of both the input and output arrays.     *
+ * d_in       is the device array; it is supposably                *
+ *                allocated and holds valid values (input).        *
+ * (d_flags)  is an array describing where the segments start      *
+ * d_out      is the output GPU array -- if you want               *
+ *            its data on CPU needs to copy it back to host.       *
+ *                                                                 *
+ * OP         class denotes the associative binary operator        *
+ *                 and should have an implementation similar to    *
+ *                `class Add' in ScanUtil.cu, i.e., exporting      *
+ *                `identity' and `apply' functions.                *
+ * T          denotes the type on which OP operates,               *
+ *                e.g., float or int.                              *
+ *                                                                 */
+template<class T>
+void shiftRight( unsigned int  block_size,
+                 unsigned long d_size, 
+                 T*            d_in,  // device
+                 T*            d_out, // device
+                 const T       ne     // neutral element
+) {
+    unsigned int num_blocks;
+    unsigned int sh_mem_size = block_size * 32; //sizeof(T);
+
+    num_blocks = ( (d_size % block_size) == 0) ?
+                    d_size / block_size     :
+                    d_size / block_size + 1 ;
+
+    shiftRightByOne<T><<< num_blocks, block_size, sh_mem_size >>>
+        (d_in, d_out, ne, d_size);
+    cudaThreadSynchronize();
+    
+    return;
+}
+
+// SEGMENTED VERSION
 template<class T>
 void sgmShiftRight( unsigned int  block_size,
                     unsigned long d_size, 
                     T*            d_in,     // device
                     T*            flags_d,  // device
                     T*            d_out,    // device
-                    T             ne        // neutral element
+                    const T       ne        // neutral element
 ) {
     unsigned int num_blocks;
     unsigned int sh_mem_size = block_size * 32; //sizeof(T);
@@ -47,60 +122,27 @@ void sgmShiftRight( unsigned int  block_size,
 }
 
 
-/**
- * block_size is the size of the cuda block (must be a multiple 
- *                of 32 less than 1025)
- * d_size     is the size of both the input and output arrays.
- * d_in       is the device array; it is supposably
- *                allocated and holds valid values (input).
- * d_out      is the output GPU array -- if you want 
- *            its data on CPU needs to copy it back to host.
- *
- * OP         class denotes the associative binary operator 
- *                and should have an implementation similar to 
- *                `class Add' in ScanUtil.cu, i.e., exporting
- *                `identity' and `apply' functions.
- * T          denotes the type on which OP operates, 
- *                e.g., float or int. 
- */
-template<class T>
-void shiftRight( unsigned int  block_size,
-                 unsigned long d_size, 
-                 T*            d_in,  // device
-                 T*            d_out, // device
-                 T             ne     // neutral element
-) {
-    unsigned int num_blocks;
-    unsigned int sh_mem_size = block_size * 32; //sizeof(T);
-
-    num_blocks = ( (d_size % block_size) == 0) ?
-                    d_size / block_size     :
-                    d_size / block_size + 1 ;
-
-    shiftRightByOne<T><<< num_blocks, block_size, sh_mem_size >>>
-        (d_in, d_out, ne, d_size);
-    cudaThreadSynchronize();
-    
-    return;
-}
 
 
-/**
- * block_size is the size of the cuda block (must be a multiple 
- *                of 32 less than 1025)
- * d_size     is the size of both the input and output arrays.
- * d_in       is the device array; it is supposably
- *                allocated and holds valid values (input).
- * d_out      is the output GPU array -- if you want 
- *            its data on CPU needs to copy it back to host.
- *
- * OP         class denotes the associative binary operator 
- *                and should have an implementation similar to 
- *                `class Add' in ScanUtil.cu, i.e., exporting
- *                `identity' and `apply' functions.
- * T          denotes the type on which OP operates, 
- *                e.g., float or int. 
- */
+/** SCAN INCLUSIVE (SEGMENTED)                                   *
+ *                                                               *
+ * block_size is the size of the cuda block (must be a multiple  *
+ *                of 32 less than 1025)                          *
+ * d_size     is the size of both the input and output arrays    *
+ * d_in       is the device array; it is supposably              *
+ *                allocated and holds valid values (input).      *
+ *(flags)     is the flag array, in which !=0 indicates          *
+ *                start of a segment.                            *
+ * d_out      is the output GPU array -- if you want             *
+ *            its data on CPU needs to copy it back to host.     *
+ *                                                               *
+ * OP         class denotes the associative binary operator      *
+ *                and should have an implementation similar to   *
+ *                `class Add' in ScanUtil.cu, i.e., exporting    *
+ *                `identity' and `apply' functions.              *
+ * T          denotes the type on which OP operates,             *
+ *                e.g., float or int.                            *
+ *                                                               */
 template<class OP, class T>
 void scanInc(    unsigned int  block_size,
                  unsigned long d_size, 
@@ -150,25 +192,7 @@ void scanInc(    unsigned int  block_size,
     cudaFree(d_rec_out);
 }
 
-
-/**
- * block_size is the size of the cuda block (must be a multiple 
- *                of 32 less than 1025)
- * d_size     is the size of both the input and output arrays.
- * d_in       is the device array; it is supposably
- *                allocated and holds valid values (input).
- * flags      is the flag array, in which !=0 indicates 
- *                start of a segment.
- * d_out      is the output GPU array -- if you want 
- *            its data on CPU you need to copy it back to host.
- *
- * OP         class denotes the associative binary operator 
- *                and should have an implementation similar to 
- *                `class Add' in ScanUtil.cu, i.e., exporting
- *                `identity' and `apply' functions.
- * T          denotes the type on which OP operates, 
- *                e.g., float or int. 
- */
+// SEGMENTED VERSION                                                          //
 template<class OP, class T>
 void sgmScanInc( const unsigned int  block_size,
                  const unsigned long d_size,
@@ -235,7 +259,14 @@ void sgmScanInc( const unsigned int  block_size,
 
 
 
-
+/* MAXIMUM SEGMENT SUM                                                         *
+ * calculates the sequence (segment) with the largest sum in the input array   *
+ * and returns the sum                                                         *
+ *                                                                             *
+ * block_size    is the chosen device block size                               *
+ * d_size        is the number of elements in the input array                  *
+ * d_in          ptr to array in GPU memory to be investigated                 *
+ *                                                                            */
 int maxSegmentSum(  unsigned int block_size, // block size chosen
                     unsigned int d_size,     // size of calculation
                     int* d_in                // device memory pointer to input array
@@ -276,6 +307,21 @@ int maxSegmentSum(  unsigned int block_size, // block size chosen
 
 
 
+/* SPARSE MATRIX VECTOR MULTIPLICATION                                         *
+ * calculates the output vector of such a multiplication and places it in d_out*
+ *                                                                             *
+ * block_size    is the chosen device block size                               *
+ * d_size        is the number of elements in the input array                  *
+ *                                                                             *
+ *               pointers to arrays in DEVICE memory                           *
+ * d_flags       flags describing rows in input matrix                         *
+ * d_mat_idx     column for corresponding entry in d_mat_val                   *
+ * d_mat_val     value of entry in input matrix                                *
+ *                                                                             *
+ * d_vec_val     input vector                                                  *
+ *                                                                             *
+ * d_out         output vector                                                 *
+ *                                                                            */
 void spMatVecMult(      unsigned int block_size,// size of each block used on the device 
                         unsigned int d_size,    // total number of entries in matrix
                         int*         d_flags,   // device
@@ -314,6 +360,154 @@ void spMatVecMult(      unsigned int block_size,// size of each block used on th
     cudaFree(d_tmp_sscan);
 
 }
+
+
+
+
+
+
+
+
+
+
+
+/** MATRIX TRANSPOSITION                                                       *
+ *  semantics: rows in outpu array = cols in input array and vice-versa        *
+ *                                                                             *
+ * block_size  size of blocks used in GPU computations div by 32 less than 1025*
+ *                                                                             *
+ * rows        number of rows in input array                                   *
+ * cols        number of columns in input array                                *
+ *             rows * cols = size of input matrix                              *
+ *                                                                             *
+ *             ptrs to arrays in device memory                                 *
+ * d_in        input array, representing matrix                                *
+ * d_out       output array                                                    *
+ *                                                                             *
+ * T           denotes type in entries of matrices, eg. int or floats         */
+//  NAÏVE IMPLEMENTATION                                                      //
+template<T> void transpose_naive(const unsigned int block_size, 
+                                 const unsigned int rows_in, 
+                                 const unsigned int cols_in,
+                                 T*,
+                                 T*
+){
+    unsigned int num_blocks = ( (d_size % block_size) == 0) ?
+                                 d_size / block_size     :
+                                 d_size / block_size + 1 ;
+
+    unsigned int sh_mem_size = block_size * sizeof(T); // USED ?? TODO
+
+    // TODO
+    printf("transpose_naive in devlib.cu.h not yet implemented");
+    return;
+}
+
+//  OPTIMAL IMPLEMENTATION                                                    //
+template<T> void transpose_opt(  const unsigned int block_size, 
+                                 const unsigned int rows_in, 
+                                 const unsigned int cols_in,
+                                 T*,
+                                 T*
+){
+    // TODO
+    printf("transpose_opt in devlib.cu.h not yet implemented");
+    return;
+}
+
+
+
+
+/** MATRIX ACCUMULATION FUNCTION (ASS3 TASK2)                                  *
+ *  semantics: unknown for sure...                                             *
+ *                                                                             *
+ * The following functions hase same input and semantics,                      *
+ * but differs in implementation                                               *
+ *                                                                             *
+ * block_size  is the size of the block used on the device                     *
+ * rows_in     rows in input array (cols in output array)                      *
+ * cols_in     cols in input array (rows in output array)                      *
+ *                                                                             *
+ * d_in        input matrix array   (device mem)                               *
+ * d_out       output matrix array  (device mem)                               *
+ *                                                                             *
+ * (second)    boolean value to describe wether second or                      *
+ *             first solution is requested if on GPU                           *
+ *                                                                             */
+template<T>
+void matrix_accfun_first( const unsigned int block_size, 
+                          const unsigned int rows_in,
+                          const unsigned int cols_in,
+                          T* d_in,
+                          T* d_out
+){
+    printf("matrix_accfun_gpu_first not implemented in devlib.cu.h"); // TODO
+    return;
+}
+
+template<T> 
+void matrix_accfun_second( const unsigned int block_size, 
+                           const unsigned int rows_in,
+                           const unsigned int cols_in,
+                           T* d_in,
+                           T* d_out
+){
+    printf("matrix_accfun_gpu_second not implemented in devlib.cu.h"); // TODO
+    return;
+}
+
+
+/** MATRIX MULTIPLICATION        (ASS3 TASK3)                                  *
+ *  semantics: performs matrix multiplication on two input matrices and        *
+ *             places result in output matrix                                  *
+ *             caller is responsible for correct dimensionality of input       *
+ *                                                                             *
+ * The following functions hase same input and semantics,                      *
+ * but differs in implementation                                               *
+ *                                                                             *
+ * block_size block size setting for device                                    *
+ *                                                                             *
+ * rows_in_a  rows in input array (cols in output array)                       *
+ * cols_in_a  cols in input array (rows in output array)                       *
+ * d_in_a     input matrix array  (device mem)                                 *
+ *                                                                             *
+ * rows_in_b  rows in input array (cols in output array)                       *
+ * cols_in_b  cols in input array (rows in output array)                       *
+ * d_in_b     input matrix array  (device mem)                                 *
+ *                                                                             *
+ * d_out      output matrix array (device mem)                                 *
+ *                                                                             */
+template<T> 
+void matmult( const unsigned int block_size,
+              const unsigned int rows_in_a,
+              const unsigned int cols_in_a,
+              T*                 d_in_a,
+              const unsigned int rows_in_b,
+              const unsigned int cols_in_b, 
+              T*                 d_in_b, 
+              T*                 d_out
+) {
+    printf("matmult not implemented in devlib.cu.h"); // TODO
+    return;
+}
+
+template<T> 
+void matmult_opt( const unsigned int block_size,
+                  const unsigned int rows_in_a,
+                  const unsigned int cols_in_a,
+                  T*                 d_in_a,
+                  const unsigned int rows_in_b,
+                  const unsigned int cols_in_b, 
+                  T*                 d_in_b, 
+                  T*                 d_out
+) {
+    printf("matmult_opt not implemented in devlib.cu.h"); // TODO
+    return;
+}
+
+
+
+
 
 
 #endif // DEV_LIB

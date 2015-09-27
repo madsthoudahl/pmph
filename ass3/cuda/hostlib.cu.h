@@ -7,26 +7,55 @@
 #include <time.h> 
 
 #define BLOCK_SIZE 512
+#define EPSILON 0.00005
+
+//****************************************************************************//
+// DECLERATION OF ALL FUNCTIONS IMPLEMENTED IN THIS LIBRARY                   //
+// ALL ARGUMENTS USED TO CALL THESE FUNCTIONS LIVE IN HOST MEMORY             //
+// DURING PROCESSING, DEVICE MEMORY IS ALLOCATED AND HOST-DEVICE              //
+// TRANSACTIONS ARE IMPLEMENTED AT THIS LEVEL                                 //
+//                                                                            //
+// DEVICE FUNCTIONS FROM DEVLIB.CU.H ARE CALLED FROM THIS LIBRARY             //
+// WITH ARGUMENTS POINTING TO MEMORY ON THE DEVICE                            //
+//****************************************************************************//
 
 
-// declaration of functions used in main
-// ALL should be moved to hostlib and implemented there
-bool validate(int size, float* ground_truth, float* same);
- 
-int transpose_cpu(int rows_in, int cols_in, float *m_in, float *m_out);
-int transpose_gpu_naive(int rows_in, int cols_in, float *m_in, float *m_out); // TODO
-int transpose_gpu(int rows_in, int cols_in, float *m_in, float *m_out);       // TODO
+// HELPER FUNCTIONS TO TIME AND VALIDATE (COULD BE MOVED OUT OF THIS LIBRARY) //
+int timeval_subtract(struct timeval *result, struct timeval *t2, struct timeval *t1)
+template<class T> bool validate(const unsigned int size, T* arr_a, T* arr_b);
 
-int matrix_accfun_cpu(int rows_in, int cols_in, float* m_in, float* m_out_a);        // TODO 
-int matrix_accfun_gpu_first(int rows_in, int cols_in, float* m_in, float* m_out_a);  // TODO
-int matrix_accfun_gpu_second(int rows_in, int cols_in, float* m_in, float* m_out_a); // TODO
+// MATRIX TRANSPOSITION (ASS3 TASK1)                                          //
+template<T> void transpose_cpu( const unsigned int, const unsigned int, T*, T*);
+template<T> void transpose_gpu( const unsigned int, const unsigned int, T*, T*, bool);
 
-int matmult_cpu(int M, int U, float* m_in_a, int U, int N, float* m_in_b, float* m_out_a);     // TODO
-int matmult_gpu(int M, int U, float* m_in_a, int U, int N, float* m_in_b, float* m_out_a);     // TODO
-int matmult_gpu_opt(int M, int U, float* m_in_a, int U, int N, float* m_in_b, float* m_out_a); // TODO
+// MATRIX ACCUMULATION FUNCTION (ASS3 TASK2)                                  //
+template<T> void matrix_accfun_cpu(const unsigned int, const unsigned int, T*, T*);       
+template<T> void matrix_accfun_gpu(const unsigned int, const unsigned int, T*, T*, bool);       
+
+// MATRIX MULTIPLICATION (ASS3 TASK3)                                         //
+template<T> void matmult_cpu(const unsigned int, const unsigned int, T*, const unsigned int, const unsigned int, T*, T*);
+template<T> void matmult_gpu(const unsigned int, const unsigned int, T*, const unsigned int, const unsigned int, T*, T*);
+
+// (SEGMENTED) SCAN INCLUSIVE (WRAPPER TO PROVIDED FUNCTION)                  //
+template<class OP, class T> void scanInc_gpu( const unsigned long, T*, T* );
+template<class OP, class T> void sgmScanInc_gpu( const unsigned long, T*, int*, T* );
+
+// MAXIMUM SEGMENT SUM (ASS2 PART1 TASK2)                                     //
+int maxSegmentSum_gpu( const unsigned int, int*); 
+
+// SPARSE MATRIX VECTOR MULTIPLICATION  (ASS2 PART1 TASK3)                    //
+void spMatVecMult_gpu( const unsigned int, int*, int*, float*, float*, const unsigned int, float*);
 
 
 
+
+
+
+
+
+/** TIMEVALUE SUBTRACTOR                       *
+ *  Helper function to calculate runtimes      *
+ *                                             */
 int timeval_subtract(struct timeval *result, struct timeval *t2, struct timeval *t1)
 {
     unsigned int resolution=1000000;
@@ -36,15 +65,16 @@ int timeval_subtract(struct timeval *result, struct timeval *t2, struct timeval 
     return (diff<0);
 }
 
-/**
- * tests that the first *size* elements of 2 arrays are identical
- *
- * size    is the number of elements to be tested
- * arr_a   array to be tested 
- * arr_b   against this array
- *
+/** ARRAY VALIDATION                                              *
+ * tests that the first *size* elements of 2 arrays are identical *
+ *                                                                *
+ * size    is the number of elements to be tested                 *
+ * arr_a   array to be tested                                     *
+ * arr_b   against this array                                     *
+ *                                                                *
  */
-bool validate(int size, float* arr_a, float* arr_b){
+template<class T>
+bool validate(const unsigned int size, T* arr_a, T* arr_b){
     bool success = true;
     for (int i=0; i < size; i++) {
         success &= ( abs( arr_a[i] - arr_b[i] ) < EPSILON );
@@ -53,43 +83,119 @@ bool validate(int size, float* arr_a, float* arr_b){
 }
 
 
-/**
- *
- * The following functions hase same input and semantics, but differs in implementation
- * All transposes an input array 
- *
- * rows_in    rows in input array (cols in output array)
- * cols_in    cols in input array (rows in output array)
- *
- * m_in       input matrix array
- * m_out      output matrix array
- *
+/** MATRIX TRANSPOSITION (2D)                                                  *
+ *  semantics: rows in outpu array = cols in input array and vice-versa        *
+ *                                                                             *
+ * The following functions hase same input and semantics,                      *
+ * but differs in implementation                                               *
+ *                                                                             *
+ * rows_in    rows in input array (cols in output array)                       *
+ * cols_in    cols in input array (rows in output array)                       *
+ *                                                                             *
+ * m_in       input matrix array                                               *
+ * m_out      output matrix array                                              *
+ *                                                                             *
+ * naive      boolean value to describe wether a naive or                      *
+ *            optimal solution is requested                                    *
+ *                                                                             *
  */
-int transpose_cpu(int rows_in, int cols_in, float *m_in, float *m_out){
-    for (row=0; row<rows_in; row++){
-        for (col=0; col<cols_in; col++) {
+/** SEQUENTIAL (ON CPU) **/
+template<T> void transpose_cpu(int rows_in, int cols_in, T *m_in, T *m_out){
+    for (int row=0; row<rows_in; row++){
+        for (int col=0; col<cols_in; col++) {
             m_out[col*cols_in+row] = m_in[row*rows_in+col];
         }
     }
 }
 
-int transpose_gpu_naive(int rows_in, int cols_in, float *h_in, float *h_out){
+/** PARALLEL (ON GPU) (additional 'naïve' argument) **/
+template<T> void transpose_gpu( const unsigned int    rows_in, 
+                                const unsigned int    cols_in,
+                                T*                    h_in,        // host
+                                T*                    h_out,       // host
+		                bool                  naive=false  // optimal, unless specified
+){
     const unsigned int d_size = rows_in * cols_in;
     const unsigned int block_size = BLOCK_SIZE;
-    unsigned int num_blocks = ( (d_size % block_size) == 0) ?
-                                 d_size / block_size     :
-                                 d_size / block_size + 1 ;
-    
-    unsigned int sh_mem_size = block_size * 32; //sizeof(T);
     
     // allocate device arrays
-    float* d_ini, d_out;
-    cudaMalloc((void**)&d_in , d_size*sizeof(float));
-    cudaMalloc((void**)&d_out, d_size*sizeof(float));
+    T *d_in, *d_out;
+    cudaMalloc((void**)&d_in , d_size*sizeof(T));
+    cudaMalloc((void**)&d_out, d_size*sizeof(T));
 
     // copy data to device
-    // solve problem using device
+    cudaMemcpy( d_in, h_in, size*sizeof(T), cudaMemcpyHostToDevice);
+
+    // solve problem using device (implementation in devlib.cu.h)
+    if (naive) {
+        transpose_naive<T>(block_size, rows_in, cols_in, d_in, d_out);
+    } else {
+        transpose_opt<T>(block_size, rows_in, cols_in, d_in, d_out);
+    }
+
     // copy result back from device
+    cudaMemcpy( h_out, d_out, size*sizeof(T), cudaMemcpyDeviceToHost);
+
+    // unallocate device arrays
+    cudaFree(d_in);
+    cudaFree(d_out);
+}
+
+
+/** MATRIX ACCUMULATION FUNCTION (ASS3 TASK2)                                  *
+ *  semantics: unknown for sure...                                             *
+ *                                                                             *
+ * The following functions hase same input and semantics,                      *
+ * but differs in implementation                                               *
+ *                                                                             *
+ * rows_in    rows in input array (cols in output array)                       *
+ * cols_in    cols in input array (rows in output array)                       *
+ *                                                                             *
+ * h_in       input matrix array   (host mem)                                  *
+ * h_out      output matrix array  (host mem)                                  *
+ *                                                                             *
+ * (second)   boolean value to describe wether second or                       *
+ *            first solution is requested if on GPU                            *
+ *                                                                             *
+ */
+template<T> 
+void matrix_accfun_cpu( int rows_in, 
+                        int cols_in, 
+                        T* h_in, 
+                        T* h_out_a
+) {
+    printf("matrix_accfun_cpu not implemented in hostlib.cu.h"); // TODO
+    return;
+}
+
+template<T> 
+void matrix_accfun_gpu( int rows_in, 
+                        int cols_in, 
+                        T* h_in, 
+                        T* h_out_a, 
+                        bool second=true
+) {    
+    const unsigned int d_size = rows_in * cols_in;
+    const unsigned int block_size = BLOCK_SIZE;
+    
+    // allocate device arrays
+    T *d_in, *d_out;
+    cudaMalloc((void**)&d_in , d_size*sizeof(T));
+    cudaMalloc((void**)&d_out, d_size*sizeof(T));
+
+    // copy data to device
+    cudaMemcpy( d_in, h_in, size*sizeof(T), cudaMemcpyHostToDevice);
+
+    // solve problem using device (implementation in devlib.cu.h)
+    if (second) {
+        matrix_accfun_second<T>(block_size, rows_in, cols_in, d_in, d_out);
+    } else {
+        matrix_accfun_first<T>(block_size, rows_in, cols_in, d_in, d_out);
+    }
+
+    // copy result back from device
+    cudaMemcpy( h_out, d_out, size*sizeof(T), cudaMemcpyDeviceToHost);
+
     // unallocate device arrays
     cudaFree(d_in);
     cudaFree(d_out);
@@ -98,242 +204,247 @@ int transpose_gpu_naive(int rows_in, int cols_in, float *h_in, float *h_out){
 
 
 
+/** MATRIX MULTIPLICATION        (ASS3 TASK3)                                  *
+ *  semantics: performs matrix multiplication on two input matrices and        *
+ *             places result in output matrix                                  *
+ *             caller is responsible for correct dimensionality of input       *
+ *                                                                             *
+ * The following functions hase same input and semantics,                      *
+ * but differs in implementation                                               *
+ *                                                                             *
+ * rows_in_a  rows in input array (cols in output array)  M                    *
+ * cols_in_a  cols in input array (rows in output array)  U                    *
+ * h_in_a     input matrix array  (host mem)              MxU                  *
+ *                                                                             *
+ * rows_in_b  rows in input array (cols in output array)  U                    *
+ * cols_in_b  cols in input array (rows in output array)  N                    *
+ * h_in_b     input matrix array  (host mem)              UxN                  *
+ *                                                                             *
+ * h_out      output matrix array (host mem)              MxN                  *
+ *                                                                             *
+ * (opt)      boolean value to describe wether optimal implementation          *
+ *            is requested... if on gpu,  standard is 'true'                   *
+ *                                                                             *
+ */
+template<T> 
+void matmult_cpu( const unsigned int rows_in_a, 
+                  const unsigned int rows_in_a,
+                  T*                 h_in_a, 
+                  const unsigned int rows_in_a,
+                  const unsigned int rows_in_a,
+                  T*                 h_in_b,
+                  T*                 h_out
+) {
+    printf("matmult_cpu not implemented in hostlib.cu.h"); // TODO
+    return;
+}
+
+template<T> 
+void matmult_gpu( const unsigned int rows_in_a, 
+                  const unsigned int rows_in_a,
+                  T*                 h_in_a, 
+                  const unsigned int rows_in_a,
+                  const unsigned int rows_in_a,
+                  T*                 h_in_b,
+                  T*                 h_out,
+                  bool               opt
+) {    
+    const unsigned int d_size_a   = rows_in_a * cols_in_a;
+    const unsigned int d_size_b   = rows_in_b * cols_in_b;
+    const unsigned int d_size_out = rows_in_a * cols_in_b;
+    const unsigned int block_size = BLOCK_SIZE;
+    
+    // allocate device arrays
+    T *d_in_a, *d_in_b, *d_out;
+    cudaMalloc((void**)&d_in_a , d_size_a*sizeof(T));
+    cudaMalloc((void**)&d_in_b , d_size_b*sizeof(T));
+    cudaMalloc((void**)&d_out, d_size_out*sizeof(T));
+
+    // copy data to device
+    cudaMemcpy( d_in_a, h_in_a, d_size_a*sizeof(T), cudaMemcpyHostToDevice);
+    cudaMemcpy( d_in_b, h_in_b, d_size_b*sizeof(T), cudaMemcpyHostToDevice);
+
+    // solve problem using device (implementation in devlib.cu.h)
+    if (opt) {
+        matmult_opt<T>(block_size, rows_in_a, cols_in_a, d_in_a, rows_in_b, cols_in_b, d_in_b, d_out);
+    } else {
+        matmult<T>(block_size, rows_in_a, cols_in_a, d_in_a, rows_in_b, cols_in_b, d_in_b, d_out);
+    }
+
+    // copy result back from device
+    cudaMemcpy( h_out, d_out, d_size_out*sizeof(T), cudaMemcpyDeviceToHost);
+
+    // unallocate device arrays
+    cudaFree(d_in_a);
+    cudaFree(d_in_b);
+    cudaFree(d_out);
+    
+    return;
+}
 
 
 
 
-
-
-
-
-
-/**
- * block_size is the size of the cuda block (must be a multiple 
- *                of 32 less than 1025)
- * d_size     is the size of both the input and output arrays.
- * d_in       is the device array; it is supposably
- *                allocated and holds valid values (input).
- * d_out      is the output GPU array -- if you want 
- *            its data on CPU needs to copy it back to host.
- *
- * OP         class denotes the associative binary operator 
- *                and should have an implementation similar to 
- *                `class Add' in ScanUtil.cu, i.e., exporting
- *                `identity' and `apply' functions.
- * T          denotes the type on which OP operates, 
- *                e.g., float or int. 
+/** (SEGMENTED) SCAN INCLUSIVE - TEMPLATE                       *
+ *                                                              *
+ * size       is the size of both the input and output arrays.  *
+ * h_in       is the host array; it is supposably               *
+ *                allocated and holds valid values (input).     *
+ * (h_flags)  is the host flag array, in which !=0 indicates    *
+ *                start of a segment.                           *
+ * h_out      is the output hostarray                           *
+ *                                                              *
+ * OP         class denotes the associative binary operator     *
+ *                and should have an implementation similar to  *
+ *                `class Add' in ScanUtil.cu, i.e., exporting   *
+ *                `identity' and `apply' functions.             *
+ * T          denotes the type on which OP operates,            *
+ *                e.g., float or int.                           *
  */
 template<class OP, class T>
-void scanInc(    unsigned int  block_size,
-                 unsigned long d_size, 
-                 T*            d_in,  // device
-                 T*            d_out  // device
+void scanInc_gpu(  const unsigned long size, 
+                   T*                  h_in,  // host
+                   T*                  h_out  // host
 ) {
-    unsigned int num_blocks;
-    unsigned int sh_mem_size = block_size * 32; //sizeof(T);
+    const unsigned int block_size = BLOCK_SIZE;
 
-    num_blocks = ( (d_size % block_size) == 0) ?
-                    d_size / block_size     :
-                    d_size / block_size + 1 ;
-
-    scanIncKernel<OP,T><<< num_blocks, block_size, sh_mem_size >>>(d_in, d_out, d_size);
-    cudaThreadSynchronize();
+    // allocate gpu mem
+    T *d_in, *d_out;
+    cudaMalloc((void**)&d_in , size*sizeof(T));
+    cudaMalloc((void**)&d_out, size*sizeof(T));
     
-    if (block_size >= d_size) { return; }
+    // copy input from host mem to device mem
+    cudaMemcpy( d_in, h_in, size*sizeof(T), cudaMemcpyHostToDevice);
+    
+    // call gpu scanInc
+    scanInc(block_size, size, d_in, d_out);
+    
+    // copy result back to host mem
+    cudaMemcpy( h_out, d_out, size*sizeof(T), cudaMemcpyDeviceToHost);
+    
+    // free dev mem
+    cudaFree(d_in );
+    cudaFree(d_out);
 
-    /**********************/
-    /*** Recursive Case ***/
-    /**********************/
-
-    //   1. allocate new device input & output array of size num_blocks
-    T *d_rec_in, *d_rec_out;
-    cudaMalloc((void**)&d_rec_in , num_blocks*sizeof(T));
-    cudaMalloc((void**)&d_rec_out, num_blocks*sizeof(T));
-
-    unsigned int num_blocks_rec = ( (num_blocks % block_size) == 0 ) ?
-                                  num_blocks / block_size     :
-                                  num_blocks / block_size + 1 ; 
-
-    //   2. copy in the end-of-block results of the previous scan 
-    copyEndOfBlockKernel<T><<< num_blocks_rec, block_size >>>(d_out, d_rec_in, num_blocks);
-    cudaThreadSynchronize();
-
-    //   3. scan recursively the last elements of each CUDA block
-    scanInc<OP,T>( block_size, num_blocks, d_rec_in, d_rec_out );
-
-    //   4. distribute the the corresponding element of the 
-    //      recursively scanned data to all elements of the
-    //      corresponding original block
-    distributeEndBlock<OP,T><<< num_blocks, block_size >>>(d_rec_out, d_out, d_size);
-    cudaThreadSynchronize();
-
-    //   5. clean up
-    cudaFree(d_rec_in );
-    cudaFree(d_rec_out);
 }
 
-
-/**
- * block_size is the size of the cuda block (must be a multiple 
- *                of 32 less than 1025)
- * d_size     is the size of both the input and output arrays.
- * d_in       is the device array; it is supposably
- *                allocated and holds valid values (input).
- * flags      is the flag array, in which !=0 indicates 
- *                start of a segment.
- * d_out      is the output GPU array -- if you want 
- *            its data on CPU you need to copy it back to host.
- *
- * OP         class denotes the associative binary operator 
- *                and should have an implementation similar to 
- *                `class Add' in ScanUtil.cu, i.e., exporting
- *                `identity' and `apply' functions.
- * T          denotes the type on which OP operates, 
- *                e.g., float or int. 
- */
+// SEGMENTED VERSION                                         //
 template<class OP, class T>
-void sgmScanInc( const unsigned int  block_size,
-                 const unsigned long d_size,
-                 T*            d_in,  //device
-                 int*          flags, //device
-                 T*            d_out  //device
+void sgmScanInc_gpu( const unsigned long size,
+                     T*                  h_in,    // host
+                     int*                h_flags, // host
+                     T*                  h_out    // host
 ) {
-    unsigned int num_blocks;
-    //unsigned int val_sh_size = block_size * sizeof(T  );
-    unsigned int flg_sh_size = block_size * sizeof(int);
+    const unsigned int block_size = BLOCK_SIZE;
 
-    num_blocks = ( (d_size % block_size) == 0) ?
-                    d_size / block_size     :
-                    d_size / block_size + 1 ;
+    // allocate gpu mem
+    T *d_in, *d_out;
+    int *d_flags;
+    cudaMalloc((void**)&d_in , size*sizeof(T));
+    cudaMalloc((void**)&d_out, size*sizeof(T));
+    cudaMalloc((void**)&d_flags, size*sizeof(int));
+    
+    // copy input from host mem to device mem
+    cudaMemcpy( d_in, h_in, size*sizeof(T), cudaMemcpyHostToDevice);
+    cudaMemcpy( d_flags, h_flags, size*sizeof(int), cudaMemcpyHostToDevice);
+    
+    // call gpu scanInc
+    segmScanInc(block_size, size, d_in, d_flags, d_out);
+    
+    // copy result back to host mem
+    cudaMemcpy( h_out, d_out, size*sizeof(T), cudaMemcpyDeviceToHost);
+    
+    // free dev mem
+    cudaFree(d_in );
+    cudaFree(d_out);
+    cudaFree(d_flags);
 
-    T     *d_rec_in;
-    int   *f_rec_in;
-    cudaMalloc((void**)&d_rec_in, num_blocks*sizeof(T  ));
-    cudaMalloc((void**)&f_rec_in, num_blocks*sizeof(int));
-
-    sgmScanIncKernel<OP,T> <<< num_blocks, block_size, 32*block_size >>>
-                    (d_in, flags, d_out, f_rec_in, d_rec_in, d_size);
-    cudaThreadSynchronize();
-    //cudaError_t err = cudaThreadSynchronize();
-    //if( err != cudaSuccess)
-    //    printf("cudaThreadSynchronize error: %s\n", cudaGetErrorString(err));
-
-    if (block_size >= d_size) { cudaFree(d_rec_in); cudaFree(f_rec_in); return; }
-
-    //   1. allocate new device input & output array of size num_blocks
-    T   *d_rec_out;
-    int *f_inds;
-    cudaMalloc((void**)&d_rec_out, num_blocks*sizeof(T   ));
-    cudaMalloc((void**)&f_inds,    d_size    *sizeof(int ));
-
-    //   2. recursive segmented scan on the last elements of each CUDA block
-    sgmScanInc<OP,T>
-                ( block_size, num_blocks, d_rec_in, f_rec_in, d_rec_out );
-
-    //   3. create an index array that is non-zero for all elements
-    //      that correspond to an open segment that crosses two blocks,
-    //      and different than zero otherwise. This is implemented
-    //      as a CUDA-block level inclusive scan on the flag array,
-    //      i.e., the segment that start the block has zero-flags,
-    //      which will be preserved by the inclusive scan. 
-    scanIncKernel<Add<int>,int> <<< num_blocks, block_size, flg_sh_size >>>
-                ( flags, f_inds, d_size );
-
-    //   4. finally, accumulate the recursive result of segmented scan
-    //      to the elements from the first segment of each block (if 
-    //      segment is open).
-    sgmDistributeEndBlock <OP,T> <<< num_blocks, block_size >>>
-                ( d_rec_out, d_out, f_inds, d_size );
-    cudaThreadSynchronize();
-
-    //   5. clean up
-    cudaFree(d_rec_in );
-    cudaFree(d_rec_out);
-    cudaFree(f_rec_in );
-    cudaFree(f_inds   );
 }
 
 
 
 
-
-
-int maxSegmentSum(  unsigned int block_size, // block size chosen
-                    unsigned int d_size,     // size of calculation
-                    int* d_in                // device memory pointer to input array
+/** MAXIMUM SEGMENT SUM                               *
+ *                                                    *
+ *  size      is total length of input array          *
+ *  d_in      input array in which MSS is to be found *
+ *                                                    *
+ */
+int maxSegmentSum_gpu(  const unsigned int size,  
+                        int*               d_in   // host 
 ) {
-    unsigned int num_blocks;
-    num_blocks = ( (d_size % block_size) == 0) ?
-                    d_size / block_size     :
-                    d_size / block_size + 1 ;
+    const unsigned int block_size = BLOCK_SIZE;
 
-    //unsigned int mem_size_float = d_size * sizeof(float);
-    unsigned int mem_size_myint = d_size * sizeof(MyInt4);
+    // allocate gpu mem
+    T *d_in, *d_out;
+    cudaMalloc((void**)&d_in , size*sizeof(T));
+    
+    // copy input from host mem to device mem
+    cudaMemcpy( d_in, h_in, size*sizeof(T), cudaMemcpyHostToDevice);
+    
+    // call gpu mss result is returned directly
+    int res = maxSegmentSum(block_size, size, d_in, d_out);
+    
+    // free dev mem
+    cudaFree(d_in );
 
-    MyInt4 *h_result = (MyInt4*) malloc(sizeof(MyInt4));
-    MyInt4 *d_myint, *d_calc;
+    return res;
 
-    cudaMalloc((void**)&d_myint, mem_size_myint);
-    cudaMalloc((void**)&d_calc, mem_size_myint);
-
-    // copy the values to a 4-tuple datastructure to support the calculations needed
-    msspTrivialMap<<<num_blocks, block_size>>>(d_in, d_myint, d_size);
-
-    // Use a Scan Inclusive with special MssOP operation on array
-    scanInc< MsspOp, MyInt4 > ( block_size, d_size, d_myint, d_calc );
-
-    // extract the last element of the calculation which hold the result 
-    // Copy result back into host memory from device, or address pointed to will be wrong!
-    cudaMemcpy( h_result, &d_calc[d_size-1], sizeof(MyInt4), cudaMemcpyDeviceToHost);
-    int h_res = h_result[0].x;
-
-    cudaFree(d_myint);
-    cudaFree(d_calc);
-
-
-    return h_res;
 }
 
 
 
+/** SPARSE MATRIX VECTOR MULTIPLICATION                       *
+ *                                                            *
+ *  size       total number of entries in matrix              *
+ *  h_flags    pointer to host array containing row-flags     *
+ *  h_mat_idx  ptr to host array containing column-idxs       *
+ *  h_mat_val  ptr to host array containing value in matrix   *
+ *  h_vec_val  ptr to host array containing vector values     *
+ *  out_size   number of rows in matrix (size of out array)   *
+ *  h_out      ptr to host array in which result is outputted *
+ */
+void spMatVecMult_gpu( const unsigned int size,     
+                       int*               h_flags,   // host
+                       int*               h_mat_idx, // host
+                       float*             h_mat_val, // host
+                       float*             h_vec_val, // host
+		       const unsigned int out_size,  
+                       float*             h_out      // host
+) {  
+    const unsigned int block_size = BLOCK_SIZE;
 
+    // calculate size of output // TODO make parallel implementation of 'sum'
+    const int out_size = sum(h_flags);
 
-void spMatVecMult(      unsigned int block_size,// size of each block used on the device 
-                        unsigned int d_size,    // total number of entries in matrix
-                        int*         d_flags,   // device
-                        int*         d_mat_idx, // device
-			float*      d_mat_val, // device
-                        float*      d_vec_val, // device
-		        float*      d_out      // device
-) {
-    unsigned int num_blocks;
-    num_blocks = ( (d_size % block_size) == 0) ?
-                    d_size / block_size     :
-                    d_size / block_size + 1 ;
+    // allocate gpu mem
+    int *d_flags, d_mat_idx;
+    float *d_mat_val, *d_vec_val, *d_out;
     
-    float*d_tmp_pairs, *d_tmp_sscan;
-    int *d_tmp_idxs;
-    cudaMalloc((void**)&d_tmp_pairs, sizeof(float) * d_size);
-    cudaMalloc((void**)&d_tmp_sscan, sizeof(float) * d_size);
-    cudaMalloc((void**)&d_tmp_idxs , sizeof(int) * d_size);
+    cudaMalloc((void**)&d_flags,   size*sizeof(int));
+    cudaMalloc((void**)&d_mat_idx, size*sizeof(int));
+    cudaMalloc((void**)&d_mat_val, size*sizeof(float));
+    cudaMalloc((void**)&d_vec_val, size*sizeof(float));
+    cudaMalloc((void**)&d_out,     out_size*sizeof(float));
     
-    printf("Performing sparse Matrix vector multiplication");
+    // copy input from host mem to device mem
+    cudaMemcpy( d_flags,   h_flags,   size*sizeof(int), cudaMemcpyHostToDevice);
+    cudaMemcpy( d_mat_idx, h_mat_idx, size*sizeof(int), cudaMemcpyHostToDevice);
+    cudaMemcpy( d_mat_val, h_mat_val, size*sizeof(float), cudaMemcpyHostToDevice);
+    cudaMemcpy( d_vec_val, h_vec_val, size*sizeof(float), cudaMemcpyHostToDevice);
     
-    // calculate array of products
-    spMatVctMult_pairs<<<num_blocks, block_size>>>(d_mat_idx, d_mat_val, d_vec_val, d_size, d_tmp_pairs);
-
-    // sum the products within their segment
-    sgmScanInc< Add<float>,float> ( block_size, d_size, d_tmp_pairs, d_flags, d_tmp_sscan );
-   
-    // sum ( scan (+) 0 ) the flags to calculate indexes of results
-    scanInc< Add<int>,int> ( block_size, d_size, d_flags, d_tmp_idxs );
+    // call gpu sparse Matrix-Vector multiplication function
+    spMatVecMult(block_size, size, d_flags, d_mat_idx, d_mat_val, d_vec_val, d_out);
     
-    // write to the output array
-    write_lastSgmElem<<< num_blocks, block_size >>>(d_tmp_sscan, d_tmp_idxs, d_flags, d_size, d_out);
-
-    // clean up newly created arrays on device
-    cudaFree(d_tmp_pairs);
-    cudaFree(d_tmp_sscan);
+    // copy result back to host mem
+    cudaMemcpy( h_out, d_out, out_size*sizeof(float), cudaMemcpyDeviceToHost);
+    
+    // free dev mem
+    cudaFree(d_flags);
+    cudaFree(d_mat_idx);
+    cudaFree(d_mat_val);
+    cudaFree(d_vec_val);
+    cudaFree(d_out);
 
 }
 

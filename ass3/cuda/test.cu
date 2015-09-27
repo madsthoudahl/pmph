@@ -22,29 +22,25 @@
 #define U 32
 
 
-// declaration of functions used in main
-// ALL should be moved to hostlib and implemented there
-bool validate(int size, float* ground_truth, float* same);    
+//All these functions live in hostlib.cu.h library
+//bool validate(int size, float* ground_truth, float* same);    
 
-int transpose_cpu(int rows_in, int cols_in, float *m_in, float *m_out);
-int transpose_gpu_naive(int rows_in, int cols_in, float *m_in, float *m_out);
-int transpose_gpu(int rows_in, int cols_in, float *m_in, float *m_out);
+//void transpose_cpu(int rows_in, int cols_in, float *m_in, float *m_out);
+//void transpose_gpu(int rows_in, int cols_in, float *m_in, float *m_out, bool naive);
 
-int matrix_accfun_cpu(int rows_in, int cols_in, float* m_in, float* m_out_a);
-int matrix_accfun_gpu_first(int rows_in, int cols_in, float* m_in, float* m_out_a);
-int matrix_accfun_gpu_second(int rows_in, int cols_in, float* m_in, float* m_out_a);
+//void matrix_accfun_cpu(int rows_in, int cols_in, float* m_in, float* m_out_a);
+//void matrix_accfun_gpu(int rows_in, int cols_in, float* m_in, float* m_out_a, bool second);
 
-int matmult_cpu(int M, int U, float* m_in_a, int U, int N, float* m_in_b, float* m_out_a);
-int matmult_gpu(int M, int U, float* m_in_a, int U, int N, float* m_in_b, float* m_out_a);
-int matmult_gpu_opt(int M, int U, float* m_in_a, int U, int N, float* m_in_b, float* m_out_a);
+//void matmult_cpu(int M, int U, float* m_in_a, int U, int N, float* m_in_b, float* m_out_a);
+//void matmult_gpu(int M, int U, float* m_in_a, int U, int N, float* m_in_b, float* m_out_a, bool opt);
 
 
 
 // declared with purpose of starting the file with its main function
-int warmup();
-int task_one();
-int task_two();
-int task_three();
+void warmup();
+void task_one();
+void task_two();
+void task_three();
 
 
 int main(int argc, char** argv) {
@@ -57,7 +53,7 @@ int main(int argc, char** argv) {
 
 
 
-int warmup(){
+void warmup(){
     // performing max segment sum calculation for GPU warmup purpose
     const unsigned int block_size  = BLOCK_SIZE;
     int* h_in    = (int*) malloc( NUM_THREADS * sizeof(int));
@@ -81,12 +77,11 @@ int warmup(){
     // cleanup memory
     free(h_in );
 
-    return 0;
 }
 
 
 
-int task_one(){
+void task_one(){
     // Transpose Matrix 
     // 1a. implement serial version
     // 1b. bonus objective implement in OPENMP
@@ -168,7 +163,7 @@ int task_one(){
 
 
 
-int task_two(){
+void task_two(){
     // Matrix Transposition during or as a pre-computatiion
     // 2 a. Reason about loop-level parallellism 
     // 2 b. bonus objective implement in OPENMP
@@ -245,12 +240,11 @@ int task_two(){
     free(m_out_c);
     free(m_out_d);
 
-    return 0;
 }
 
 
 
-int task_three(){
+void task_three(){
     // Dense Matrix-Matrix multiplication
     // 1a. implement serial version
     // 1b. bonus objective implement in OPENMP
@@ -332,6 +326,5 @@ int task_three(){
     free(m_out_c);
     free(m_out_d);
 
-    return 0;
 }
 
