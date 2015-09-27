@@ -267,7 +267,23 @@ void matmult_cpu( const unsigned int rows_in_a,
                   T*                 h_in_b,
                   T*                 h_out
 ) {
-    printf("matmult_cpu not implemented in hostlib.cu.h"); // TODO
+    if (cols_in_a != rows_in_b) {
+        printf("matrix multiplication: input dimensions does not fit");
+        return;
+    }
+    //int m = rows_in_a;
+    //int u = rows_in_b; // = cols_in_a
+    //int n = cols_in_b;
+    float tmp;
+    for (int i=0 ; i<rows_in_a ; i++ ) {
+        tmp = 0;
+        for (int j=0 ; j<cols_in_b ; j++) {
+	    for (int k=0 ; k<cols_in_a ; k++) {
+	        tmp += A[i*rows_in_a+k] * B[k*rows_in_b+j]
+	    }
+            h_out[i*rows_in_a + j] = tmp
+	}
+    }
     return;
 }
 
