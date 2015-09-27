@@ -21,20 +21,21 @@
 
 
 // HELPER FUNCTIONS TO TIME AND VALIDATE (COULD BE MOVED OUT OF THIS LIBRARY) //
-int timeval_subtract(struct timeval *result, struct timeval *t2, struct timeval *t1)
+int timeval_subtract(struct timeval *result, struct timeval *t2, struct timeval *t1);
 template<class T> bool validate(const unsigned int size, T* arr_a, T* arr_b);
+template<class T> T sum(const unsigned int, T* );
 
 // MATRIX TRANSPOSITION (ASS3 TASK1)                                          //
-template<T> void transpose_cpu( const unsigned int, const unsigned int, T*, T*);
-template<T> void transpose_gpu( const unsigned int, const unsigned int, T*, T*, bool);
+template<class T> void transpose_cpu( const unsigned int, const unsigned int, T*, T*);
+template<class T> void transpose_gpu( const unsigned int, const unsigned int, T*, T*, bool);
 
 // MATRIX ACCUMULATION FUNCTION (ASS3 TASK2)                                  //
-template<T> void matrix_accfun_cpu(const unsigned int, const unsigned int, T*, T*);       
-template<T> void matrix_accfun_gpu(const unsigned int, const unsigned int, T*, T*, bool);       
+template<class T> void matrix_accfun_cpu(const unsigned int, const unsigned int, T*, T*);       
+template<class T> void matrix_accfun_gpu(const unsigned int, const unsigned int, T*, T*, bool);       
 
 // MATRIX MULTIPLICATION (ASS3 TASK3)                                         //
-template<T> void matmult_cpu(const unsigned int, const unsigned int, T*, const unsigned int, const unsigned int, T*, T*);
-template<T> void matmult_gpu(const unsigned int, const unsigned int, T*, const unsigned int, const unsigned int, T*, T*);
+template<class T> void matmult_cpu(const unsigned int, const unsigned int, T*, const unsigned int, const unsigned int, T*, T*);
+template<class T> void matmult_gpu(const unsigned int, const unsigned int, T*, const unsigned int, const unsigned int, T*, T*);
 
 // (SEGMENTED) SCAN INCLUSIVE (WRAPPER TO PROVIDED FUNCTION)                  //
 template<class OP, class T> void scanInc_gpu( const unsigned long, T*, T* );
@@ -83,6 +84,23 @@ bool validate(const unsigned int size, T* arr_a, T* arr_b){
 }
 
 
+/** ARRAY SUMMATION                                               *
+ * calculates the sum of the following *size* numbers in array    *
+ *                                                                *
+ * size    is the number of elements to be added                  *
+ * arr     array to be summarized                                 *
+ *                                                                *
+ */
+template<class T> T sum(const unsigned int size, T* arr){
+    T acc = 0;
+    for (int i=0 ; i <size; i++) {
+        acc += arr[i];
+    }
+    return acc
+}
+
+
+
 /** MATRIX TRANSPOSITION (2D)                                                  *
  *  semantics: rows in outpu array = cols in input array and vice-versa        *
  *                                                                             *
@@ -100,7 +118,7 @@ bool validate(const unsigned int size, T* arr_a, T* arr_b){
  *                                                                             *
  */
 /** SEQUENTIAL (ON CPU) **/
-template<T> void transpose_cpu(int rows_in, int cols_in, T *m_in, T *m_out){
+template<class T> void transpose_cpu(int rows_in, int cols_in, T *m_in, T *m_out){
     for (int row=0; row<rows_in; row++){
         for (int col=0; col<cols_in; col++) {
             m_out[col*cols_in+row] = m_in[row*rows_in+col];
@@ -109,7 +127,7 @@ template<T> void transpose_cpu(int rows_in, int cols_in, T *m_in, T *m_out){
 }
 
 /** PARALLEL (ON GPU) (additional 'naïve' argument) **/
-template<T> void transpose_gpu( const unsigned int    rows_in, 
+template<class T> void transpose_gpu( const unsigned int    rows_in, 
                                 const unsigned int    cols_in,
                                 T*                    h_in,        // host
                                 T*                    h_out,       // host
@@ -124,7 +142,7 @@ template<T> void transpose_gpu( const unsigned int    rows_in,
     cudaMalloc((void**)&d_out, d_size*sizeof(T));
 
     // copy data to device
-    cudaMemcpy( d_in, h_in, size*sizeof(T), cudaMemcpyHostToDevice);
+    cudaMemcpy( d_in, h_in, d_size*sizeof(T), cudaMemcpyHostToDevice);
 
     // solve problem using device (implementation in devlib.cu.h)
     if (naive) {
@@ -134,7 +152,7 @@ template<T> void transpose_gpu( const unsigned int    rows_in,
     }
 
     // copy result back from device
-    cudaMemcpy( h_out, d_out, size*sizeof(T), cudaMemcpyDeviceToHost);
+    cudaMemcpy( h_out, d_out, d_size*sizeof(T), cudaMemcpyDeviceToHost);
 
     // unallocate device arrays
     cudaFree(d_in);
@@ -158,21 +176,21 @@ template<T> void transpose_gpu( const unsigned int    rows_in,
  *            first solution is requested if on GPU                            *
  *                                                                             *
  */
-template<T> 
+template<class T> 
 void matrix_accfun_cpu( int rows_in, 
                         int cols_in, 
                         T* h_in, 
-                        T* h_out_a
+                        T* h_out
 ) {
     printf("matrix_accfun_cpu not implemented in hostlib.cu.h"); // TODO
     return;
 }
 
-template<T> 
+template<class T> 
 void matrix_accfun_gpu( int rows_in, 
                         int cols_in, 
                         T* h_in, 
-                        T* h_out_a, 
+                        T* h_out, 
                         bool second=true
 ) {    
     const unsigned int d_size = rows_in * cols_in;
@@ -184,7 +202,7 @@ void matrix_accfun_gpu( int rows_in,
     cudaMalloc((void**)&d_out, d_size*sizeof(T));
 
     // copy data to device
-    cudaMemcpy( d_in, h_in, size*sizeof(T), cudaMemcpyHostToDevice);
+    cudaMemcpy( d_in, h_in, d_size * sizeof(T), cudaMemcpyHostToDevice);
 
     // solve problem using device (implementation in devlib.cu.h)
     if (second) {
@@ -194,7 +212,7 @@ void matrix_accfun_gpu( int rows_in,
     }
 
     // copy result back from device
-    cudaMemcpy( h_out, d_out, size*sizeof(T), cudaMemcpyDeviceToHost);
+    cudaMemcpy( h_out, d_out, d_size*sizeof(T), cudaMemcpyDeviceToHost);
 
     // unallocate device arrays
     cudaFree(d_in);
@@ -226,12 +244,12 @@ void matrix_accfun_gpu( int rows_in,
  *            is requested... if on gpu,  standard is 'true'                   *
  *                                                                             *
  */
-template<T> 
+template<class T> 
 void matmult_cpu( const unsigned int rows_in_a, 
-                  const unsigned int rows_in_a,
+                  const unsigned int cols_in_a,
                   T*                 h_in_a, 
-                  const unsigned int rows_in_a,
-                  const unsigned int rows_in_a,
+                  const unsigned int rows_in_b,
+                  const unsigned int cols_in_b,
                   T*                 h_in_b,
                   T*                 h_out
 ) {
@@ -239,12 +257,12 @@ void matmult_cpu( const unsigned int rows_in_a,
     return;
 }
 
-template<T> 
+template<class T> 
 void matmult_gpu( const unsigned int rows_in_a, 
-                  const unsigned int rows_in_a,
+                  const unsigned int cols_in_a,
                   T*                 h_in_a, 
-                  const unsigned int rows_in_a,
-                  const unsigned int rows_in_a,
+                  const unsigned int rows_in_b,
+                  const unsigned int cols_in_b,
                   T*                 h_in_b,
                   T*                 h_out,
                   bool               opt
@@ -366,24 +384,25 @@ void sgmScanInc_gpu( const unsigned long size,
 
 /** MAXIMUM SEGMENT SUM                               *
  *                                                    *
- *  size      is total length of input array          *
- *  d_in      input array in which MSS is to be found *
+ *  d_size      is total length of input array          *
+ *  h_in      input array in which MSS is to be found *
  *                                                    *
  */
-int maxSegmentSum_gpu(  const unsigned int size,  
-                        int*               d_in   // host 
+template<class T> T maxSegmentSum_gpu(  
+                        const unsigned int d_size,  
+                        T*                 h_in   // host 
 ) {
     const unsigned int block_size = BLOCK_SIZE;
 
     // allocate gpu mem
-    T *d_in, *d_out;
-    cudaMalloc((void**)&d_in , size*sizeof(T));
+    T *d_in, res;
+    cudaMalloc((void**)&d_in, d_size*sizeof(T));
     
     // copy input from host mem to device mem
-    cudaMemcpy( d_in, h_in, size*sizeof(T), cudaMemcpyHostToDevice);
+    cudaMemcpy( d_in, h_in, d_size*sizeof(T), cudaMemcpyHostToDevice);
     
     // call gpu mss result is returned directly
-    int res = maxSegmentSum(block_size, size, d_in, d_out);
+    res = maxSegmentSum<T>( block_size, d_size, d_in);
     
     // free dev mem
     cudaFree(d_in );
@@ -391,7 +410,6 @@ int maxSegmentSum_gpu(  const unsigned int size,
     return res;
 
 }
-
 
 
 /** SPARSE MATRIX VECTOR MULTIPLICATION                       *
@@ -415,10 +433,10 @@ void spMatVecMult_gpu( const unsigned int size,
     const unsigned int block_size = BLOCK_SIZE;
 
     // calculate size of output // TODO make parallel implementation of 'sum'
-    const int out_size = sum(h_flags);
+    // const int out_size = sum<int>(size, h_flags);
 
     // allocate gpu mem
-    int *d_flags, d_mat_idx;
+    int *d_flags, *d_mat_idx;
     float *d_mat_val, *d_vec_val, *d_out;
     
     cudaMalloc((void**)&d_flags,   size*sizeof(int));

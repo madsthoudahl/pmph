@@ -9,7 +9,7 @@
 
 // (SEGMENTED) SHIFT RIGHT                                                    //
 template<class T> void ShiftRight( unsigned int, unsigned long, T*, T*, const T);
-template class<T> void sgmShiftRight( unsigned int, unsigned long, T*, T*, T*, const T);
+template<class T> void sgmShiftRight( unsigned int, unsigned long, T*, T*, T*, const T);
 
 // (SEGMENTED) SCAN INCLUSIVE                                                 //
 template<class OP, class T> 
@@ -18,7 +18,7 @@ template<class OP, class T>
 void sgmScanInc( const unsigned int, const unsigned long, T*, int*, T*);
 
 // MAXIMUM SEGMENT SUM                                                        //
-int maxSegmentSum( unsigned int, unsigned int, int* );
+template<class T> T maxSegmentSum( unsigned int, unsigned int, T* );
 
 // SPARSE MATRIX VECTOR MULTIPLICATION                                        //
 void spMatVecMult( unsigned int, unsigned int, int*, int*, float*, float*, float* ); 
@@ -29,20 +29,20 @@ void spMatVecMult( unsigned int, unsigned int, int*, int*, float*, float*, float
  ******************************************************************************/
 
 // MATRIX TRANSPOSITION         (ASS3 TASK1)                                  //
-template<T> void transpose_naive(const unsigned int, const unsigned int, const unsigned int, T*, T*);
-template<T> void transpose_opt(const unsigned int, const unsigned int, const unsigned int, T*, T*);
+template<class T> void transpose_naive(const unsigned int, const unsigned int, const unsigned int, T*, T*);
+template<class T> void transpose_opt(const unsigned int, const unsigned int, const unsigned int, T*, T*);
 
 // MATRIX ACCUMULATION FUNCTION (ASS3 TASK2)                                  //
-template<T> 
+template<class T> 
 void matrix_accfun_first(const unsigned int, const unsigned int, const unsigned int, T*, T*);
-template<T> 
+template<class T> 
 void matrix_accfun_second(const unsigned int, const unsigned int, const unsigned int, T*, T*);
 
 
 // MATRIX MULTIPLICATION        (ASS3 TASK3)                                  //
-template<T> 
+template<class T> 
 void matmult(const unsigned int, const unsigned int, const unsigned int, T*, const unsigned int, const unsigned int, T*, T* );
-template<T> 
+template<class T> 
 void matmult_opt(const unsigned int, const unsigned int, const unsigned int, T*, const unsigned int, const unsigned int, T*, T* );
 
 
@@ -267,9 +267,9 @@ void sgmScanInc( const unsigned int  block_size,
  * d_size        is the number of elements in the input array                  *
  * d_in          ptr to array in GPU memory to be investigated                 *
  *                                                                            */
-int maxSegmentSum(  unsigned int block_size, // block size chosen
-                    unsigned int d_size,     // size of calculation
-                    int* d_in                // device memory pointer to input array
+template<class T> maxSegmentSum( unsigned int block_size, // block size chosen
+                           unsigned int d_size,     // size of calculation
+                           T*           d_in        // device memory pointer to input array
 ) {
     unsigned int num_blocks;
     num_blocks = ( (d_size % block_size) == 0) ?
@@ -299,8 +299,7 @@ int maxSegmentSum(  unsigned int block_size, // block size chosen
     cudaFree(d_myint);
     cudaFree(d_calc);
 
-
-    return h_res;
+    return (T) h_res;
 }
 
 
@@ -386,7 +385,7 @@ void spMatVecMult(      unsigned int block_size,// size of each block used on th
  *                                                                             *
  * T           denotes type in entries of matrices, eg. int or floats         */
 //  NAÏVE IMPLEMENTATION                                                      //
-template<T> void transpose_naive(const unsigned int block_size, 
+template<class T> void transpose_naive(const unsigned int block_size, 
                                  const unsigned int rows_in, 
                                  const unsigned int cols_in,
                                  T*,
@@ -404,7 +403,7 @@ template<T> void transpose_naive(const unsigned int block_size,
 }
 
 //  OPTIMAL IMPLEMENTATION                                                    //
-template<T> void transpose_opt(  const unsigned int block_size, 
+template<class T> void transpose_opt(  const unsigned int block_size, 
                                  const unsigned int rows_in, 
                                  const unsigned int cols_in,
                                  T*,
@@ -434,7 +433,7 @@ template<T> void transpose_opt(  const unsigned int block_size,
  * (second)    boolean value to describe wether second or                      *
  *             first solution is requested if on GPU                           *
  *                                                                             */
-template<T>
+template<class T>
 void matrix_accfun_first( const unsigned int block_size, 
                           const unsigned int rows_in,
                           const unsigned int cols_in,
@@ -445,7 +444,7 @@ void matrix_accfun_first( const unsigned int block_size,
     return;
 }
 
-template<T> 
+template<class T> 
 void matrix_accfun_second( const unsigned int block_size, 
                            const unsigned int rows_in,
                            const unsigned int cols_in,
@@ -477,7 +476,7 @@ void matrix_accfun_second( const unsigned int block_size,
  *                                                                             *
  * d_out      output matrix array (device mem)                                 *
  *                                                                             */
-template<T> 
+template<class T> 
 void matmult( const unsigned int block_size,
               const unsigned int rows_in_a,
               const unsigned int cols_in_a,
@@ -491,7 +490,7 @@ void matmult( const unsigned int block_size,
     return;
 }
 
-template<T> 
+template<class T> 
 void matmult_opt( const unsigned int block_size,
                   const unsigned int rows_in_a,
                   const unsigned int cols_in_a,
