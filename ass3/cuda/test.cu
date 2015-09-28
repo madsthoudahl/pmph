@@ -8,18 +8,20 @@
 // in general
 #define EPS 0.0005
 #define BLOCK_SIZE 512
-// for warmup
+// for warmup and tests
 #define NUM_THREADS 7624
+#define MTEST 10
+#define NTEST 10
 // task one specific
-#define ROWS_M 32
-#define COLS_N 32
+#define ROWS_M 10 
+#define COLS_N 8
 // task two specific
 #define M2 64 // As per assignment
-#define N2 32
+#define N2 8
 // task three specific
-#define M 32
-#define U 32
-#define N 32 
+#define M 10
+#define U 8
+#define N 10 
 
 
 //All these functions live in hostlib.cu.h library
@@ -38,7 +40,7 @@
 
 // declared with purpose of starting the file with its main function
 int warmup();
-void mprinter();
+template<class T> void mprinter(T);
 void task_one();
 void task_two();
 void task_three();
@@ -46,10 +48,11 @@ void task_three();
 
 int main(int argc, char** argv) {
     warmup(); // sole purpose is 'warming up GPU' so that timings get valid downstream.
-    mprinter();
-    //task_one();
-    //task_two();
-    //task_three();
+    mprinter((float)1.0);
+    mprinter(1);
+    task_one();
+    task_two();
+    task_three();
     return 0;
 }
 
@@ -70,21 +73,26 @@ int warmup(){
     return result;
 }
 
-
-void mprinter(){
-    const unsigned int rows_in = 3;
-    const unsigned int cols_in = 3;
-    const unsigned int size = rows * cols;
+template<class T>
+void mprinter(T start){
+    const unsigned int rows_in = MTEST;
+    const unsigned int cols_in = NTEST;
+    const unsigned int size = rows_in * cols_in;
 
     const unsigned int rows_out = cols_in;
     const unsigned int cols_out = rows_in;
 
-    int* arr_in  = (int*) malloc( size * sizeof(int) );
-    int* arr_out = (int*) malloc( size * sizeof(int) );
-    for(unsigned int i=0; i<size; i++) h_in[i] = i;
+    T* arr_in  = (T*) malloc( size * sizeof(T) );
+    T* arr_out = (T*) malloc( size * sizeof(T) );
+    T acc = start;
+    for(unsigned int i=0; i<size; i++) {
+        arr_in[i] = acc;
+        acc += i;
+    }
 
-    transpose_cpu<float>( rows_in, cols_in, arr_in, arr_out);
-
+    transpose_cpu<T>( rows_in, cols_in, arr_in, arr_out);
+    printf("\nMATRIX PRINTER:\n");
+    printf("For testpurposes a matrix is printed, transposed and printed again.\n");
     matprint(rows_in, cols_in, arr_in);
     matprint(rows_out, cols_out, arr_out);
 
@@ -93,6 +101,7 @@ void mprinter(){
 }
 
 void task_one(){
+    printf("\nASSIGNMENT3 TASK1: MATRIX TRANSPOSITION\n");
     // Transpose Matrix 
     // 1a. implement serial version
     // 1b. bonus objective implement in OPENMP
@@ -129,7 +138,7 @@ void task_one(){
         timeval_subtract(&t_diff, &t_end, &t_start);
         elapsed_a = (t_diff.tv_sec*1e6+t_diff.tv_usec); 
     }
-    printf("Transpose Matrix sized %d x %d on CPU runs in: %lu microsecs", cols, rows, elapsed_a);
+    printf("\nTranspose Matrix sized %d x %d on CPU runs in: %lu microsecs\n", cols, rows, elapsed_a);
     
     // TASK 1 B) OMITTED
 
@@ -144,7 +153,7 @@ void task_one(){
         elapsed_c = (t_diff.tv_sec*1e6+t_diff.tv_usec); 
 	valid_c = validate<float>(arr_size, m_out_a, m_out_c);
     }
-    printf("Transpose Matrix sized %d x %d on GPU naïvely runs in: %lu microsecs\n", cols, rows, elapsed_c);
+    printf("\nTranspose Matrix sized %d x %d on GPU naïvely runs in: %lu microsecs\n", cols, rows, elapsed_c);
     if (valid_c) printf("Naïve implementation is VALID\n");
     else printf("Naïve implementation is INVALID\n");
 
@@ -160,9 +169,9 @@ void task_one(){
         elapsed_d = (t_diff.tv_sec*1e6+t_diff.tv_usec); 
 	valid_d = validate<float>(arr_size, m_out_a, m_out_d);
     }
-    printf("Transpose Matrix sized %d x %d on GPU optimized runs in: %lu microsecs", cols, rows, elapsed_d);
-    if (valid_d) printf("Optimal implementation is VALID\n");
-    else printf("Optimal implementation is INVALID\n");
+    printf("\nTranspose Matrix sized %d x %d on GPU optimized runs in: %lu microsecs\n", cols, rows, elapsed_d);
+    if (valid_d) printf("Optimal implementation is VALID\n\n");
+    else printf("Optimal implementation is INVALID\n\n");
 
     // TODO print statistics, speedup difference and so on
 
@@ -178,6 +187,7 @@ void task_one(){
 
 
 void task_two(){
+    printf("\nASSIGNMENT3 TASK2: MATRIX TRANSPOSITION AS PREPROCESSING\n");
     // Matrix Transposition during or as a pre-computatiion
     // 2 a. Reason about loop-level parallellism 
     // 2 b. bonus objective implement in OPENMP
@@ -213,7 +223,7 @@ void task_two(){
         timeval_subtract(&t_diff, &t_end, &t_start);
         elapsed_a = (t_diff.tv_sec*1e6+t_diff.tv_usec); 
     }
-    printf("Matrix accfun on size %d x %d on CPU runs in: %lu microsecs",cols, rows, elapsed_a);
+    printf("\nMatrix accfun on size %d x %d on CPU runs in: %lu microsecs\n",cols, rows, elapsed_a);
     
     // TASK 1 B) OMITTED
 
@@ -228,7 +238,7 @@ void task_two(){
         elapsed_c = (t_diff.tv_sec*1e6+t_diff.tv_usec); 
 	valid_c = validate<float>(arr_size, m_out_a, m_out_c);
     }
-    printf("Matrix accfun on size %d x %d on GPU first impl runs in: %lu microsecs\n",cols, rows, elapsed_c);
+    printf("\nMatrix accfun on size %d x %d on GPU first impl runs in: %lu microsecs\n",cols, rows, elapsed_c);
     if (valid_c) printf("Implementation is VALID\n");
     else printf("Implementation is INVALID\n");
 
@@ -244,9 +254,9 @@ void task_two(){
         elapsed_d = (t_diff.tv_sec*1e6+t_diff.tv_usec); 
 	valid_d = validate<float>(arr_size, m_out_a, m_out_d);
     }
-    printf("Matrix accfun on size %d x %d on GPU rewrite runs in: %lu microsecs",cols, rows, elapsed_d);
-    if (valid_d) printf("Implementation is VALID\n");
-    else printf("Implementation is INVALID\n");
+    printf("\nMatrix accfun on size %d x %d on GPU rewrite runs in: %lu microsecs\n",cols, rows, elapsed_d);
+    if (valid_d) printf("Implementation is VALID\n\n");
+    else printf("Implementation is INVALID\n\n");
 
     // TODO 
     // The modified program (CUDA transpositions included) has about two 
@@ -264,6 +274,7 @@ void task_two(){
 
 
 void task_three(){
+    printf("\nASSIGNMENT3 TASK3: MATRIX MULTIPLICATION\n");
     // Dense Matrix-Matrix multiplication
     // 1a. implement serial version
     // 1b. bonus objective implement in OPENMP
@@ -271,20 +282,28 @@ void task_three(){
     // 1d. implement serial version
 
     // initiate data to transpose (dense matrix)
-    const int res_size = M * N;
+
+    const unsigned int a_rows = M;
+    const unsigned int a_cols = U;
+    const unsigned int b_rows = U;
+    const unsigned int b_cols = N;
+ 
+    const unsigned int a_size   = a_rows * a_cols;
+    const unsigned int b_size   = b_rows * b_cols;
+    const unsigned int res_size = a_rows * b_cols;
     float *m_in_a, *m_in_b, *m_out_a, *m_out_c, *m_out_d;
-    m_in_a  = (float*) malloc(M * U * sizeof(float));
-    m_in_b  = (float*) malloc(U * N * sizeof(float));
+    m_in_a  = (float*) malloc(  a_size * sizeof(float));
+    m_in_b  = (float*) malloc(  b_size * sizeof(float));
     m_out_a = (float*) malloc(res_size * sizeof(float));
     m_out_c = (float*) malloc(res_size * sizeof(float));
     m_out_d = (float*) malloc(res_size * sizeof(float));
     
-    for (int i=0; i<(M*U); i++){
-        m_in_a[i] = 0; // TODO random number
+    for (int i=0; i<(a_size); i++){
+        m_in_a[i] = i; // TODO random number
     }
 
-    for (int i=0; i<(U*N); i++){
-        m_in_b[i] = 0; // TODO random number
+    for (int i=0; i<(b_size); i++){
+        m_in_b[i] = i; // TODO random number
     }
 
     // initiate timing variable, keep results for validation
@@ -296,13 +315,13 @@ void task_three(){
     { 
         gettimeofday(&t_start, NULL); 
 
-        matmult_cpu<float>(M, U, m_in_a, U, N, m_in_b, m_out_a);
+        matmult_cpu<float>(a_rows, a_cols, m_in_a, b_rows, b_cols, m_in_b, m_out_a);
     
         gettimeofday(&t_end, NULL); 
         timeval_subtract(&t_diff, &t_end, &t_start);
         elapsed_a = (t_diff.tv_sec*1e6+t_diff.tv_usec); 
     }
-    printf("MatrixMult on (%dx%d) x (%d,%d) on CPU runs in: %lu microsecs",M,U,U,N, elapsed_a);
+    printf("\nMatrixMult on (%dx%d) x (%d,%d) on CPU runs in: %lu microsecs\n",a_rows, a_cols, b_rows, b_cols, elapsed_a);
     
     // TASK 1 B) OMITTED
 
@@ -310,14 +329,14 @@ void task_three(){
     { 
         gettimeofday(&t_start, NULL); 
 
-        matmult_gpu<float>(M, U, m_in_a, U, N, m_in_b, m_out_a, false);
+        matmult_gpu<float>(a_rows, a_cols, m_in_a, b_rows, b_cols, m_in_b, m_out_a, false);
     
         gettimeofday(&t_end, NULL); 
         timeval_subtract(&t_diff, &t_end, &t_start);
         elapsed_c = (t_diff.tv_sec*1e6+t_diff.tv_usec); 
 	valid_c = validate(res_size, m_out_a, m_out_c);
     }
-    printf("MatrixMult on (%dx%d) x (%d,%d) on GPU runs in: %lu microsecs",M,U,U,N, elapsed_c);
+    printf("\nMatrixMult on (%dx%d) x (%d,%d) on GPU runs in: %lu microsecs\n",a_rows, a_cols, b_rows, b_cols, elapsed_c);
     if (valid_c) printf("Implementation is VALID\n");
     else printf("Implementation is INVALID\n");
 
@@ -326,16 +345,16 @@ void task_three(){
     { 
         gettimeofday(&t_start, NULL); 
 
-        matmult_gpu(M, U, m_in_a, U, N, m_in_b, m_out_a, true);
+        matmult_gpu(a_rows, a_cols, m_in_a, b_rows, b_cols, m_in_b, m_out_a, true);
     
         gettimeofday(&t_end, NULL); 
         timeval_subtract(&t_diff, &t_end, &t_start);
         elapsed_d = (t_diff.tv_sec*1e6+t_diff.tv_usec); 
 	valid_d = validate(res_size, m_out_a, m_out_d);
     }
-    printf("MatrixMult on (%dx%d) x (%d,%d) on CPU runs in: %lu microsecs",M,U,U,N, elapsed_d);
-    if (valid_d) printf("Optimal Implementation is VALID\n");
-    else printf("Optimal Implementation is INVALID\n");
+    printf("\nMatrixMult on (%dx%d) x (%d,%d) on CPU runs in: %lu microsecs\n",a_rows, a_cols, b_rows, b_cols, elapsed_d);
+    if (valid_d) printf("Optimal Implementation is VALID\n\n");
+    else printf("Optimal Implementation is INVALID\n\n");
 
     // TODO 
     // Measure and compare the various running times. 

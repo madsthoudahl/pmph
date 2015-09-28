@@ -24,8 +24,8 @@
 int timeval_subtract(struct timeval *result, struct timeval *t2, struct timeval *t1);
 template<class T> bool validate(const unsigned int size, T* arr_a, T* arr_b);
 template<class T> T sum(const unsigned int, T* );
-void matprint(const unsigned int cols, const unsigned int cols, int* arr );
-void matprint(const unsigned int cols, const unsigned int cols, float* arr );
+void matprint(const unsigned int, const unsigned int, int* );
+void matprint(const unsigned int, const unsigned int, float* );
 
 // MATRIX TRANSPOSITION (ASS3 TASK1)                                          //
 template<class T> void transpose_cpu( const unsigned int, const unsigned int, T*, T*);
@@ -98,7 +98,7 @@ template<class T> T sum(const unsigned int size, T* arr){
     for (int i=0 ; i <size; i++) {
         acc += arr[i];
     }
-    return acc
+    return acc;
 }
 
 
@@ -106,20 +106,20 @@ template<class T> T sum(const unsigned int size, T* arr){
  *  pretty prints a matrix array ... 
  *
  */
-void matprint(const unsigned int cols, const unsigned int cols, int* arr ){
+void matprint(const unsigned int rows, const unsigned int cols, int* arr ){
     for (int i=0 ; i<rows ; i++){
         for (int j=0 ; j<cols ; j++){
-            printf("%d4 ");
+            printf("%4d ", arr[i*rows+j]);
 	}
 	printf("\n");
     }
     printf("\n");
 }
 
-void matprint(const unsigned int cols, const unsigned int cols, float* arr ){
+void matprint(const unsigned int rows, const unsigned int cols, float* arr ){
     for (int i=0 ; i<rows ; i++){
         for (int j=0 ; j<cols ; j++){
-            printf("%f3.3 ");
+            printf("%6.1f ", arr[i*rows + j]);
 	}
 	printf("\n");
     }
@@ -144,7 +144,11 @@ void matprint(const unsigned int cols, const unsigned int cols, float* arr ){
  *                                                                             *
  */
 /** SEQUENTIAL (ON CPU) **/
-template<class T> void transpose_cpu(int rows_in, int cols_in, T *m_in, T *m_out){
+template<class T> void transpose_cpu( const unsigned int rows_in, 
+                                      const unsigned int cols_in, 
+                                      T *m_in, 
+                                      T *m_out
+) {
     for (int row=0; row<rows_in; row++){
         for (int col=0; col<cols_in; col++) {
             m_out[col*cols_in+row] = m_in[row*rows_in+col];
@@ -157,7 +161,7 @@ template<class T> void transpose_gpu( const unsigned int    rows_in,
                                       const unsigned int    cols_in,
                                       T*                    h_in,        // host
                                       T*                    h_out,       // host
-                                      bool                  naive=false  // optimal, unless specified
+                                      bool                  naive        // optimal, unless specified
 ){
     const unsigned int d_size = rows_in * cols_in;
     const unsigned int block_size = BLOCK_SIZE;
@@ -214,6 +218,7 @@ void matrix_accfun_cpu( int rows_in,
                         T* h_in, 
                         T* h_out
 ) {
+    T accum, tmp;
     for (int i=0 ; i<rows_in ; i++) {
         accum =  h_in[i*rows_in] * h_in[i*rows_in];
 	h_out[i*rows_in] = accum;
@@ -305,9 +310,9 @@ void matmult_cpu( const unsigned int rows_in_a,
         tmp = 0;
         for (int j=0 ; j<cols_in_b ; j++) {
 	    for (int k=0 ; k<cols_in_a ; k++) {
-	        tmp += A[i*rows_in_a+k] * B[k*rows_in_b+j]
+	        tmp += h_in_a[i*rows_in_a+k] * h_in_b[k*rows_in_b+j];
 	    }
-            h_out[i*rows_in_a + j] = tmp
+            h_out[i*rows_in_a + j] = tmp;
 	}
     }
     return;

@@ -269,7 +269,7 @@ void sgmScanInc( const unsigned int  block_size,
  *                                                                            */
 int maxSegmentSum( unsigned int block_size, // block size chosen
                    unsigned int d_size,     // size of calculation
-                   T*           d_in        // device memory pointer to input array
+                   int*         d_in        // device memory pointer to input array
 ) {
     unsigned int num_blocks;
     num_blocks = ( (d_size % block_size) == 0) ?
@@ -394,15 +394,15 @@ template<class T> void transpose_naive( const unsigned int block_size,
     // Implement a “naive” transpose in CUDA, i.e., write a two-dimensional CUDA
     // kernel that exploits both N and M dimensions of parallelism and which 
     // performs the transposition much in the way shown in the pseudo-code
-    unsigned int d_size = rows_in * cols_in;
-    unsigned int num_blocks = ( (d_size % block_size) == 0) ?
-                                 d_size / block_size     :
-                                 d_size / block_size + 1 ;
+    // unsigned int d_size = rows_in * cols_in;
+    // unsigned int num_blocks = ( (d_size % block_size) == 0) ?
+    //                              d_size / block_size     :
+    //                              d_size / block_size + 1 ;
 
     //unsigned int sh_mem_size = block_size * sizeof(T); // USED ?? TODO
 
     // TODO
-    printf("transpose_naive in devlib.cu.h not yet implemented");
+    printf("transpose_naive in devlib.cu.h not yet implemented\n");
     return;
 }
 
@@ -418,7 +418,7 @@ template<class T> void transpose_opt(  const unsigned int block_size,
     // input array A and for the writes to the result array B
     // TODO
  
-    printf("transpose_opt in devlib.cu.h not yet implemented");
+    printf("transpose_opt in devlib.cu.h not yet implemented\n");
     return;
 }
 
@@ -456,7 +456,7 @@ void matrix_accfun_first( const unsigned int block_size,
     // i.e., corresponds to a one-dimensional CUDA kernel, and the second one 
     // is executed sequentially, i.e., it is part of the kernel code
     
-    printf("matrix_accfun_gpu_first not implemented in devlib.cu.h"); // TODO
+    printf("matrix_accfun_gpu_first not implemented in devlib.cu.h\n"); // TODO
     return;
 }
 
@@ -477,7 +477,7 @@ void matrix_accfun_second( const unsigned int block_size,
     // • finally, after the execution of the CUDA kernel, transpose B' to obtain 
     //   the original result B
 
-    printf("matrix_accfun_gpu_second not implemented in devlib.cu.h"); // TODO
+    printf("matrix_accfun_gpu_second not implemented in devlib.cu.h\n"); // TODO
     return;
 }
 
@@ -521,7 +521,7 @@ void matmult( const unsigned int block_size,
     // pseudo-code above. (Uses a two-dimensional kernel/grid corresponding 
     // to the two parallel outer loops.)
 
-    printf("matmult not implemented in devlib.cu.h"); // TODO
+    printf("matmult not implemented in devlib.cu.h\n"); // TODO
     return;
 }
 
@@ -540,7 +540,7 @@ void matmult_opt( const unsigned int block_size,
     // TILE-size – see lecture notes. (Uses a two-dimensional kernel/grid 
     // corresponding to the two parallel outer loops.)
 
-    printf("matmult_opt not implemented in devlib.cu.h"); // TODO
+    printf("matmult_opt not implemented in devlib.cu.h\n"); // TODO
     return;
 }
 
