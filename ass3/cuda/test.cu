@@ -38,6 +38,7 @@
 
 // declared with purpose of starting the file with its main function
 int warmup();
+void mprinter();
 void task_one();
 void task_two();
 void task_three();
@@ -45,9 +46,10 @@ void task_three();
 
 int main(int argc, char** argv) {
     warmup(); // sole purpose is 'warming up GPU' so that timings get valid downstream.
-    task_one();
-    task_two();
-    task_three();
+    mprinter();
+    //task_one();
+    //task_two();
+    //task_three();
     return 0;
 }
 
@@ -69,6 +71,14 @@ int warmup(){
 }
 
 
+void mprinter(){
+    const unsigned int rows = 3;
+    const unsigned int cols = 3;
+    const unsigned int size = rows * cols;
+    int* arr = (int*) malloc( size * sizeof(int) );
+    for(unsigned int i=0; i<size; i++) h_in[i] = i;
+    matprint(rows,cols,arr);
+}
 
 void task_one(){
     // Transpose Matrix 

@@ -100,6 +100,20 @@ template<class T> T sum(const unsigned int size, T* arr){
 }
 
 
+/** MATRIX PRINTER
+ *  pretty prints a matrix array ... 
+ *
+ */
+void matprint(const unsigned int cols, const unsigned int cols, int* arr ){
+    for (int i=0 ; i<rows ; i++){
+        for (int j=0 ; j<cols ; j++){
+            printf("%d4 ");
+	}
+	printf("\n");
+    }
+    printf("\n");
+}
+
 
 /** MATRIX TRANSPOSITION (2D)                                                  *
  *  semantics: rows in outpu array = cols in input array and vice-versa        *
@@ -459,9 +473,6 @@ void spMatVecMult_gpu( const unsigned int size,
                        float*             h_out      // host
 ) {  
     const unsigned int block_size = BLOCK_SIZE;
-
-    // calculate size of output // TODO make parallel implementation of 'sum'
-    // const int out_size = sum<int>(size, h_flags);
 
     // allocate gpu mem
     int *d_flags, *d_mat_idx;
