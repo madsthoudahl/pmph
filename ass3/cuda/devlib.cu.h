@@ -391,6 +391,9 @@ template<class T> void transpose_naive( const unsigned int block_size,
                                         T*,
                                         T*
 ){
+    // Implement a “naive” transpose in CUDA, i.e., write a two-dimensional CUDA
+    // kernel that exploits both N and M dimensions of parallelism and which 
+    // performs the transposition much in the way shown in the pseudo-code
     unsigned int d_size = rows_in * cols_in;
     unsigned int num_blocks = ( (d_size % block_size) == 0) ?
                                  d_size / block_size     :
@@ -410,10 +413,17 @@ template<class T> void transpose_opt(  const unsigned int block_size,
                                  T*,
                                  T*
 ){
+    // Implement a CUDA optimized transposition that uses tiling in shared memory 
+    // in order to achieve memory-coalesced accesses for both the reads from the 
+    // input array A and for the writes to the result array B
     // TODO
+ 
     printf("transpose_opt in devlib.cu.h not yet implemented");
     return;
 }
+
+
+
 
 
 
@@ -440,7 +450,12 @@ void matrix_accfun_first( const unsigned int block_size,
                           const unsigned int cols_in,
                           T* d_in,
                           T* d_out
-){
+) {
+    // Implement quickly a straightforward CUDA version of the program above, 
+    // in which the first loop of index i and count N is executed in parallel, 
+    // i.e., corresponds to a one-dimensional CUDA kernel, and the second one 
+    // is executed sequentially, i.e., it is part of the kernel code
+    
     printf("matrix_accfun_gpu_first not implemented in devlib.cu.h"); // TODO
     return;
 }
@@ -451,10 +466,25 @@ void matrix_accfun_second( const unsigned int block_size,
                            const unsigned int cols_in,
                            T* d_in,
                            T* d_out
-){
+) {
+    // Rewrite quickly the CUDA program such that all accesses to global memory
+    // are coalesced, i.e., the new program reads from the transpose of A, and 
+    // computes the transpose of B:
+    // • transpose A in A', using the optimized CUDA implementation of Task I.1.
+    // • write a CUDA kernel that implements a modified version of the pseudo-
+    //   code above that uses A' instead of A and computes B' (the transpose of B),
+    //   instead of B.
+    // • finally, after the execution of the CUDA kernel, transpose B' to obtain 
+    //   the original result B
+
     printf("matrix_accfun_gpu_second not implemented in devlib.cu.h"); // TODO
     return;
 }
+
+
+
+
+
 
 
 /** MATRIX MULTIPLICATION        (ASS3 TASK3)                                  *
@@ -487,6 +517,10 @@ void matmult( const unsigned int block_size,
               T*                 d_in_b, 
               T*                 d_out
 ) {
+    // Implement a naïve CUDA version that straightforwardly implements the 
+    // pseudo-code above. (Uses a two-dimensional kernel/grid corresponding 
+    // to the two parallel outer loops.)
+
     printf("matmult not implemented in devlib.cu.h"); // TODO
     return;
 }
@@ -501,6 +535,11 @@ void matmult_opt( const unsigned int block_size,
                   T*                 d_in_b, 
                   T*                 d_out
 ) {
+    // Implement a CUDA optimized version that uses tiling in shared memory in
+    // order to reduce the number of global-memory accesses by a factor of 
+    // TILE-size – see lecture notes. (Uses a two-dimensional kernel/grid 
+    // corresponding to the two parallel outer loops.)
+
     printf("matmult_opt not implemented in devlib.cu.h"); // TODO
     return;
 }

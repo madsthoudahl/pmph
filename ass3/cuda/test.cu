@@ -72,12 +72,24 @@ int warmup(){
 
 
 void mprinter(){
-    const unsigned int rows = 3;
-    const unsigned int cols = 3;
+    const unsigned int rows_in = 3;
+    const unsigned int cols_in = 3;
     const unsigned int size = rows * cols;
-    int* arr = (int*) malloc( size * sizeof(int) );
+
+    const unsigned int rows_out = cols_in;
+    const unsigned int cols_out = rows_in;
+
+    int* arr_in  = (int*) malloc( size * sizeof(int) );
+    int* arr_out = (int*) malloc( size * sizeof(int) );
     for(unsigned int i=0; i<size; i++) h_in[i] = i;
-    matprint(rows,cols,arr);
+
+    transpose_cpu<float>( rows_in, cols_in, arr_in, arr_out);
+
+    matprint(rows_in, cols_in, arr_in);
+    matprint(rows_out, cols_out, arr_out);
+
+    free(arr_in);
+    free(arr_out);
 }
 
 void task_one(){
@@ -183,7 +195,7 @@ void task_two(){
     m_out_d = (float*) malloc(arr_size * sizeof(float));
 
     for (int i=0; i<(arr_size); i++){
-        m_in[i] = i; // TODO random number
+        m_in[i] = i * 1.0; // TODO random number
     }
 
     // initiate timing variable, keep results for validation
@@ -236,7 +248,11 @@ void task_two(){
     if (valid_d) printf("Implementation is VALID\n");
     else printf("Implementation is INVALID\n");
 
-    // TODO print statistics, speedup difference and so on
+    // TODO 
+    // The modified program (CUDA transpositions included) has about two 
+    // times the number of global memory accesses of the original program. 
+    // Does it run faster or slower than the original, and by how much
+    // (for a suitably large N)?
 
     free(m_in);
     free(m_out_a);
@@ -321,7 +337,9 @@ void task_three(){
     if (valid_d) printf("Optimal Implementation is VALID\n");
     else printf("Optimal Implementation is INVALID\n");
 
-    // TODO print statistics, speedup difference and so on
+    // TODO 
+    // Measure and compare the various running times. 
+    // How many GFlops does the naïve and optimized CUDA versions achieve?
 
     free(m_in_a);
     free(m_in_b);

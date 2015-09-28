@@ -24,6 +24,8 @@
 int timeval_subtract(struct timeval *result, struct timeval *t2, struct timeval *t1);
 template<class T> bool validate(const unsigned int size, T* arr_a, T* arr_b);
 template<class T> T sum(const unsigned int, T* );
+void matprint(const unsigned int cols, const unsigned int cols, int* arr );
+void matprint(const unsigned int cols, const unsigned int cols, float* arr );
 
 // MATRIX TRANSPOSITION (ASS3 TASK1)                                          //
 template<class T> void transpose_cpu( const unsigned int, const unsigned int, T*, T*);
@@ -114,6 +116,16 @@ void matprint(const unsigned int cols, const unsigned int cols, int* arr ){
     printf("\n");
 }
 
+void matprint(const unsigned int cols, const unsigned int cols, float* arr ){
+    for (int i=0 ; i<rows ; i++){
+        for (int j=0 ; j<cols ; j++){
+            printf("%f3.3 ");
+	}
+	printf("\n");
+    }
+    printf("\n");
+}
+
 
 /** MATRIX TRANSPOSITION (2D)                                                  *
  *  semantics: rows in outpu array = cols in input array and vice-versa        *
@@ -142,10 +154,10 @@ template<class T> void transpose_cpu(int rows_in, int cols_in, T *m_in, T *m_out
 
 /** PARALLEL (ON GPU) (additional 'naïve' argument) **/
 template<class T> void transpose_gpu( const unsigned int    rows_in, 
-                                const unsigned int    cols_in,
-                                T*                    h_in,        // host
-                                T*                    h_out,       // host
-		                bool                  naive=false  // optimal, unless specified
+                                      const unsigned int    cols_in,
+                                      T*                    h_in,        // host
+                                      T*                    h_out,       // host
+                                      bool                  naive=false  // optimal, unless specified
 ){
     const unsigned int d_size = rows_in * cols_in;
     const unsigned int block_size = BLOCK_SIZE;
