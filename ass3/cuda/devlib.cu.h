@@ -29,21 +29,21 @@ void spMatVecMult( unsigned int, unsigned int, int*, int*, float*, float*, float
  ******************************************************************************/
 
 // MATRIX TRANSPOSITION         (ASS3 TASK1)                                  //
-template<class T> void transpose_naive(const unsigned int, const unsigned int, const unsigned int, T*, T*);
-template<class T> void transpose_opt(const unsigned int, const unsigned int, const unsigned int, T*, T*);
+template<class T> void 
+transpose(const unsigned int, const unsigned int, const unsigned int, T*, T*, bool=false);
 
 // MATRIX ACCUMULATION FUNCTION (ASS3 TASK2)                                  //
-template<class T> 
-void matrix_accfun_first(const unsigned int, const unsigned int, const unsigned int, T*, T*);
-template<class T> 
-void matrix_accfun_second(const unsigned int, const unsigned int, const unsigned int, T*, T*);
+template<class T> void 
+matrix_accfun_first(const unsigned int, const unsigned int, const unsigned int, T*, T*);
+template<class T> void 
+matrix_accfun_second(const unsigned int, const unsigned int, const unsigned int, T*, T*);
 
 
 // MATRIX MULTIPLICATION        (ASS3 TASK3)                                  //
-template<class T> 
-void matmult(const unsigned int, const unsigned int, const unsigned int, T*, const unsigned int, const unsigned int, T*, T* );
-template<class T> 
-void matmult_opt(const unsigned int, const unsigned int, const unsigned int, T*, const unsigned int, const unsigned int, T*, T* );
+template<class T> void 
+matmult(const unsigned int, const unsigned int, const unsigned int, T*, const unsigned int, const unsigned int, T*, T* );
+template<class T> void 
+matmult_opt(const unsigned int, const unsigned int, const unsigned int, T*, const unsigned int, const unsigned int, T*, T* );
 
 
 
@@ -385,42 +385,34 @@ void spMatVecMult(      unsigned int block_size,// size of each block used on th
  *                                                                             *
  * T           denotes type in entries of matrices, eg. int or floats         */
 //  NAÏVE IMPLEMENTATION                                                      //
-template<class T> void transpose_naive( const unsigned int block_size, 
-                                        const unsigned int rows_in, 
-                                        const unsigned int cols_in,
-                                        T*,
-                                        T*
+template<class T> void transpose( dim3               block_size, 
+                                  const unsigned int rows_in, 
+                                  const unsigned int cols_in,
+                                  T*                 d_in,
+                                  T*                 d_out,
+                                  bool               naive
 ){
     // Implement a “naive” transpose in CUDA, i.e., write a two-dimensional CUDA
     // kernel that exploits both N and M dimensions of parallelism and which 
     // performs the transposition much in the way shown in the pseudo-code
-    // unsigned int d_size = rows_in * cols_in;
-    // unsigned int num_blocks = ( (d_size % block_size) == 0) ?
-    //                              d_size / block_size     :
-    //                              d_size / block_size + 1 ;
+    dim3 grid_size;
+    grid_size.x = ( (cols_in % block_size.x) == 0) ?
+                     cols_in / block_size.x     :
+                     cols_in / block_size.x + 1 ;
+    grid_size.y = ( (rows_in % block_size.y) == 0) ?
+                     rows_in / block_size.y     :
+                     rows_in / block_size.y + 1 ;
+    
+    if (naive) {
+        transpose_naive_kernel<<< grid_size, block_size >>> (rows_in, cols_in, d_in, d_out);
+    } else {
+        //unsigned int sh_mem_size = block_size * sizeof(T); // USED ?? TODO
+        printf("transpose_opt_kernel in devkernels.cu.h not yet implemented\n");
+        transpose_opt_kernel<<< grid_size, block_size >>> (rows_in, cols_in, d_in, d_out);
+    }
 
-    //unsigned int sh_mem_size = block_size * sizeof(T); // USED ?? TODO
-
-    // TODO
-    printf("transpose_naive in devlib.cu.h not yet implemented\n");
-    return;
 }
 
-//  OPTIMAL IMPLEMENTATION                                                    //
-template<class T> void transpose_opt(  const unsigned int block_size, 
-                                 const unsigned int rows_in, 
-                                 const unsigned int cols_in,
-                                 T*,
-                                 T*
-){
-    // Implement a CUDA optimized transposition that uses tiling in shared memory 
-    // in order to achieve memory-coalesced accesses for both the reads from the 
-    // input array A and for the writes to the result array B
-    // TODO
- 
-    printf("transpose_opt in devlib.cu.h not yet implemented\n");
-    return;
-}
 
 
 
@@ -521,7 +513,7 @@ void matmult( const unsigned int block_size,
     // pseudo-code above. (Uses a two-dimensional kernel/grid corresponding 
     // to the two parallel outer loops.)
 
-    printf("matmult not implemented in devlib.cu.h\n"); // TODO
+    printf("matmult_naive not implemented in devlib.cu.h\n"); // TODO
     return;
 }
 

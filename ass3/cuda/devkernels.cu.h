@@ -3,6 +3,50 @@
 
 #include <cuda_runtime.h>
 
+
+/*******************************************************************************
+ *  ASSIGNMENT 3 KERNELS                                                       *
+ ******************************************************************************/
+
+// ASS3 TASK1 -  MATRIX TRANSPOSITION                                         //
+template<class T> __global__ void 
+transpose_naive_kernel( const unsigned int rows_in, const unsigned int cols_in, T* d_in, T* d_out ){
+    // TODO fix implementation
+    // Implement a “naive” transpose in CUDA, i.e., write a two-dimensional CUDA
+    // kernel that exploits both N and M dimensions of parallelism and which 
+    // performs the transposition much in the way shown in the pseudo-code
+    const unsigned int xid = blockIdx.x*blockDim.x + threadIdx.x;
+    const unsigned int yid = blockIdx.y*blockDim.y + threadIdx.y;
+    // map the two 2D indices to a single linear, 1D index
+    int grid_width  = gridDim.x * blockDim.x;
+    int grid_height = gridDim.y * blockDim.y;
+    int l_idx = yid * grid_width  + xid;
+    int s_idx = xid * grid_height + yid;
+
+    if ((yid < cols_in) & (xid < rows_in)) {
+        d_out[s_idx] = d_in[l_idx];
+    }
+}
+
+template<class T> __global__ void 
+transpose_opt_kernel( const unsigned int rows_in, const unsigned int cols_in, T* d_in, T* d_out ){
+    // TODO fix implementation
+    const unsigned int xid = blockIdx.x*blockDim.x + threadIdx.x;
+    const unsigned int yid = blockIdx.y*blockDim.y + threadIdx.y;
+    if ((yid < cols_in) & (xid < rows_in)) {
+        d_out[yid*rows_in+xid] = d_in[xid*cols_in+yid] * 2;
+    }
+}
+
+// ASS3 TASK2 -  MATRIX MULTIPLICATION                                        //
+
+// ASS3 TASK3 -  MATRIX MULTIPLICATION                                        //
+
+
+
+
+
+
 template<class T>
 class Add {
   public:

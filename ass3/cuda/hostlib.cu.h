@@ -5,6 +5,8 @@
 
 #include <sys/time.h>
 #include <time.h> 
+#include <math.h>
+#include <stdlib.h>
 
 #define BLOCK_SIZE 512
 #define EPSILON 0.00005
@@ -26,6 +28,7 @@ template<class T> bool validate(const unsigned int size, T* arr_a, T* arr_b);
 template<class T> T sum(const unsigned int, T* );
 void matprint(const unsigned int, const unsigned int, int* );
 void matprint(const unsigned int, const unsigned int, float* );
+void matprint(const unsigned int, const unsigned int, double* );
 
 // MATRIX TRANSPOSITION (ASS3 TASK1)                                          //
 template<class T> void transpose_cpu( const unsigned int, const unsigned int, T*, T*);
@@ -109,7 +112,7 @@ template<class T> T sum(const unsigned int size, T* arr){
 void matprint(const unsigned int rows, const unsigned int cols, int* arr ){
     for (int i=0 ; i<rows ; i++){
         for (int j=0 ; j<cols ; j++){
-            printf("%4d ", arr[i*rows+j]);
+            printf("%4d ", arr[i*cols+j]);
 	}
 	printf("\n");
     }
@@ -119,12 +122,23 @@ void matprint(const unsigned int rows, const unsigned int cols, int* arr ){
 void matprint(const unsigned int rows, const unsigned int cols, float* arr ){
     for (int i=0 ; i<rows ; i++){
         for (int j=0 ; j<cols ; j++){
-            printf("%6.1f ", arr[i*rows + j]);
+            printf("%6.1f ", arr[i*cols+j]);
 	}
 	printf("\n");
     }
     printf("\n");
 }
+
+void matprint(const unsigned int rows, const unsigned int cols, double* arr ){
+    for (int i=0 ; i<rows ; i++){
+        for (int j=0 ; j<cols ; j++){
+            printf("%6.1f ", arr[i*cols+j]);
+	}
+	printf("\n");
+    }
+    printf("\n");
+}
+
 
 
 /** MATRIX TRANSPOSITION (2D)                                                  *
@@ -151,7 +165,7 @@ template<class T> void transpose_cpu( const unsigned int rows_in,
 ) {
     for (int row=0; row<rows_in; row++){
         for (int col=0; col<cols_in; col++) {
-            m_out[col*cols_in+row] = m_in[row*rows_in+col];
+            m_out[col*rows_in+row] = m_in[row*cols_in+col];
         }
     }
 }
@@ -164,7 +178,9 @@ template<class T> void transpose_gpu( const unsigned int    rows_in,
                                       bool                  naive        // optimal, unless specified
 ){
     const unsigned int d_size = rows_in * cols_in;
-    const unsigned int block_size = BLOCK_SIZE;
+    dim3 block_size;
+    block_size.x = floor(sqrt(BLOCK_SIZE));
+    block_size.y = floor(sqrt(BLOCK_SIZE));
     
     // allocate device arrays
     T *d_in, *d_out;
@@ -175,11 +191,7 @@ template<class T> void transpose_gpu( const unsigned int    rows_in,
     cudaMemcpy( d_in, h_in, d_size*sizeof(T), cudaMemcpyHostToDevice);
 
     // solve problem using device (implementation in devlib.cu.h)
-    if (naive) {
-        transpose_naive<T>(block_size, rows_in, cols_in, d_in, d_out);
-    } else {
-        transpose_opt<T>(block_size, rows_in, cols_in, d_in, d_out);
-    }
+    transpose<T>(block_size, rows_in, cols_in, d_in, d_out, naive);
 
     // copy result back from device
     cudaMemcpy( h_out, d_out, d_size*sizeof(T), cudaMemcpyDeviceToHost);

@@ -10,11 +10,11 @@
 #define BLOCK_SIZE 512
 // for warmup and tests
 #define NUM_THREADS 7624
-#define MTEST 10
-#define NTEST 10
+#define MTEST 4
+#define NTEST 6
 // task one specific
-#define ROWS_M 10 
-#define COLS_N 8
+#define ROWS_M 5
+#define COLS_N 33
 // task two specific
 #define M2 64 // As per assignment
 #define N2 8
@@ -41,16 +41,15 @@
 // declared with purpose of starting the file with its main function
 int warmup();
 template<class T> void mprinter(T);
-void task_one();
+void task_one(bool);
 void task_two();
 void task_three();
 
 
 int main(int argc, char** argv) {
     warmup(); // sole purpose is 'warming up GPU' so that timings get valid downstream.
-    mprinter((float)1.0);
     mprinter(1);
-    task_one();
+    task_one(true);
     task_two();
     task_three();
     return 0;
@@ -100,7 +99,7 @@ void mprinter(T start){
     free(arr_out);
 }
 
-void task_one(){
+void task_one(bool print){
     printf("\nASSIGNMENT3 TASK1: MATRIX TRANSPOSITION\n");
     // Transpose Matrix 
     // 1a. implement serial version
@@ -123,6 +122,11 @@ void task_one(){
         m_in[i] = i; // TODO random number
     }
 
+    if (print) {
+        printf("\nInput matrix before transposition: \n");
+        matprint(rows, cols, m_in);
+    }
+
     // initiate timing variable, keep results for validation
     unsigned long int elapsed_a, elapsed_c, elapsed_d;
     struct timeval t_start, t_end, t_diff;
@@ -140,6 +144,10 @@ void task_one(){
     }
     printf("\nTranspose Matrix sized %d x %d on CPU runs in: %lu microsecs\n", cols, rows, elapsed_a);
     
+    if (print) {
+        printf("Matrix after transposition by cpu: \n");
+        matprint(cols, rows, m_out_a);
+    }
     // TASK 1 B) OMITTED
 
     // TASK 1 C)
@@ -157,6 +165,10 @@ void task_one(){
     if (valid_c) printf("Naïve implementation is VALID\n");
     else printf("Naïve implementation is INVALID\n");
 
+    if (print) {
+        printf("Matrix after transposition by gpu (naive): \n");
+        matprint(cols, rows, m_out_c);
+    }
 
     // TASK 1 D)
     { 
@@ -173,6 +185,10 @@ void task_one(){
     if (valid_d) printf("Optimal implementation is VALID\n\n");
     else printf("Optimal implementation is INVALID\n\n");
 
+    if (print) {
+        printf("Matrix after transposition by gpu (opt): \n");
+        matprint(cols, rows, m_out_d);
+    }
     // TODO print statistics, speedup difference and so on
 
     free(m_in);
