@@ -30,7 +30,8 @@ void spMatVecMult( unsigned int, unsigned int, int*, int*, float*, float*, float
 
 // MATRIX TRANSPOSITION         (ASS3 TASK1)                                  //
 template<class T> void 
-transpose(const unsigned int, const unsigned int, const unsigned int, T*, T*, bool=false);
+transpose( const unsigned int, const unsigned int, T*, T*, const unsigned int=TILE_SIZE, bool=false);
+//transpose(const unsigned int, const unsigned int, T*, T*, bool=false);
 
 // MATRIX ACCUMULATION FUNCTION (ASS3 TASK2)                                  //
 template<class T> void 
@@ -385,29 +386,42 @@ void spMatVecMult(      unsigned int block_size,// size of each block used on th
  *                                                                             *
  * T           denotes type in entries of matrices, eg. int or floats         */
 //  NAÏVE IMPLEMENTATION                                                      //
-template<class T> void transpose( dim3               block_size, 
+template<class T> void transpose( 
                                   const unsigned int rows_in, 
                                   const unsigned int cols_in,
                                   T*                 d_in,
                                   T*                 d_out,
+                                  const unsigned int tile_size,
                                   bool               naive
 ){
     // Implement a “naive” transpose in CUDA, i.e., write a two-dimensional CUDA
     // kernel that exploits both N and M dimensions of parallelism and which 
     // performs the transposition much in the way shown in the pseudo-code
+    unsigned int t_size;
+    if (tile_size > 32) {
+        printf("matrix transpose failing due to bad tile_size");
+        return;
+    } else if (tile_size==0) { t_size = TILE_SIZE; // use default value from kernel library
+    } else { t_size = tile_size; }
+
+    dim3 block_size;
+    block_size.x = t_size ;
+    block_size.y = t_size ;
+
     dim3 grid_size;
-    grid_size.x = ( (cols_in % block_size.x) == 0) ?
-                     cols_in / block_size.x     :
-                     cols_in / block_size.x + 1 ;
-    grid_size.y = ( (rows_in % block_size.y) == 0) ?
-                     rows_in / block_size.y     :
-                     rows_in / block_size.y + 1 ;
+    grid_size.x = ( (cols_in % t_size == 0) ? //block_size.x
+                     cols_in / t_size : 
+                     cols_in / t_size + 1 );
+    grid_size.y = ( (rows_in % t_size == 0) ? //block_size.y
+                     rows_in / t_size :
+                     rows_in / t_size + 1 );
     
     if (naive) {
         transpose_naive_kernel<<< grid_size, block_size >>> (rows_in, cols_in, d_in, d_out);
     } else {
-        const unsigned int sh_mem_size = block_size.x * block_size.y * sizeof(T); 
-        transpose_opt_kernel<<< grid_size, block_size, sh_mem_size >>> (rows_in, cols_in, d_in, d_out);
+        transpose_opt_kernel_old<<< grid_size, block_size >>> (rows_in, cols_in, d_in, d_out);
+        //block_size.y = ((TILE_SIZE) / 8);
+        //transpose_opt_kernel_two<<< grid_size, block_size >>> (rows_in, cols_in, d_in, d_out);
     }
 
 }
@@ -436,7 +450,7 @@ template<class T> void transpose( dim3               block_size,
  *             first solution is requested if on GPU                           *
  *                                                                             */
 template<class T>
-void matrix_accfun_first( const unsigned int block_size, 
+void matrix_accfun_first( const unsigned int block_size,
                           const unsigned int rows_in,
                           const unsigned int cols_in,
                           T* d_in,
@@ -447,7 +461,12 @@ void matrix_accfun_first( const unsigned int block_size,
     // i.e., corresponds to a one-dimensional CUDA kernel, and the second one 
     // is executed sequentially, i.e., it is part of the kernel code
     
-    printf("matrix_accfun_gpu_first not implemented in devlib.cu.h\n"); // TODO
+    unsigned int num_blocks;
+    num_blocks = ( (rows_in % block_size) == 0) ?
+                    rows_in / block_size     :
+                    rows_in / block_size + 1 ;
+
+    mat_acc_kernel_first<T><<< num_blocks, block_size >>>(rows_in, cols_in, d_in, d_out);
     return;
 }
 
@@ -469,6 +488,19 @@ void matrix_accfun_second( const unsigned int block_size,
     //   the original result B
 
     printf("matrix_accfun_gpu_second not implemented in devlib.cu.h\n"); // TODO
+    T* d_in_t, *d_out_t;
+    cudaMalloc((void**) &d_in_t, rows_in*cols_in*sizeof(T) );
+    cudaMalloc((void**) &d_out_t, rows_in*cols_in*sizeof(T) );
+
+    transpose(rows_in, cols_in, d_in, d_in_t);
+
+    mat_acc_kernel_second<T><<<  >>>(cols_in, rows_in, d_in_t, d_out_t);
+    
+    transpose(cols_in, rows_in, d_out_t, d_out);
+    
+    cudaFree(d_in_t);
+    cudaFree(d_out_t);
+
     return;
 }
 

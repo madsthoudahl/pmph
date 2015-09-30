@@ -6,15 +6,14 @@
 #include "hostlib.cu.h"
 
 // in general
-#define EPS 0.0005
-#define BLOCK_SIZE 512
 // for warmup and tests
 #define NUM_THREADS 7624
 #define MTEST 4
 #define NTEST 6
 // task one specific
-#define ROWS_M 5
-#define COLS_N 33
+#define ROWS_M 2353
+#define COLS_N 1235
+#define TILE_SIZE 32
 // task two specific
 #define M2 64 // As per assignment
 #define N2 8
@@ -23,18 +22,6 @@
 #define U 8
 #define N 10 
 
-
-//All these functions live in hostlib.cu.h library
-//bool validate(int size, float* ground_truth, float* same);    
-
-//void transpose_cpu(int rows_in, int cols_in, float *m_in, float *m_out);
-//void transpose_gpu(int rows_in, int cols_in, float *m_in, float *m_out, bool naive);
-
-//void matrix_accfun_cpu(int rows_in, int cols_in, float* m_in, float* m_out_a);
-//void matrix_accfun_gpu(int rows_in, int cols_in, float* m_in, float* m_out_a, bool second);
-
-//void matmult_cpu(int M, int U, float* m_in_a, int U, int N, float* m_in_b, float* m_out_a);
-//void matmult_gpu(int M, int U, float* m_in_a, int U, int N, float* m_in_b, float* m_out_a, bool opt);
 
 
 
@@ -49,9 +36,9 @@ void task_three();
 int main(int argc, char** argv) {
     warmup(); // sole purpose is 'warming up GPU' so that timings get valid downstream.
     mprinter(1);
-    task_one(true);
-    task_two();
-    task_three();
+    task_one(false);
+    //task_two();
+    //task_three();
     return 0;
 }
 
@@ -110,6 +97,7 @@ void task_one(bool print){
     // initiate data to transpose (dense matrix)
     const unsigned int rows = ROWS_M;
     const unsigned int cols = COLS_N;
+    const unsigned int tile_size = TILE_SIZE;
     const unsigned int arr_size = rows * cols;
 
     float *m_in, *m_out_a, *m_out_c, *m_out_d;
@@ -119,7 +107,7 @@ void task_one(bool print){
     m_out_d = (float*) malloc(arr_size * sizeof(float));
 
     for (int i=0; i<(arr_size); i++){
-        m_in[i] = i; // TODO random number
+        m_in[i] = (float) i;
     }
 
     if (print) {
@@ -154,7 +142,7 @@ void task_one(bool print){
     { 
         gettimeofday(&t_start, NULL); 
 
-        transpose_gpu<float>( rows, cols, m_in, m_out_c, true);
+        transpose_gpu<float>( rows, cols, m_in, m_out_c, tile_size, true);
     
         gettimeofday(&t_end, NULL); 
         timeval_subtract(&t_diff, &t_end, &t_start);
@@ -174,7 +162,7 @@ void task_one(bool print){
     { 
         gettimeofday(&t_start, NULL); 
 
-        transpose_gpu<float>( rows, cols, m_in, m_out_d, false);
+        transpose_gpu<float>( rows, cols, m_in, m_out_d, tile_size, false);
     
         gettimeofday(&t_end, NULL); 
         timeval_subtract(&t_diff, &t_end, &t_start);
@@ -221,7 +209,7 @@ void task_two(){
     m_out_d = (float*) malloc(arr_size * sizeof(float));
 
     for (int i=0; i<(arr_size); i++){
-        m_in[i] = i * 1.0; // TODO random number
+        m_in[i] = (float) i;
     }
 
     // initiate timing variable, keep results for validation

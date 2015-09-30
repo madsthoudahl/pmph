@@ -8,8 +8,9 @@
 #include <math.h>
 #include <stdlib.h>
 
-#define BLOCK_SIZE 512
-#define EPSILON 0.00005
+//#define BLOCK_SIZE 512
+#define EPSILON 0.005
+#define TILE 32
 
 //****************************************************************************//
 // DECLERATION OF ALL FUNCTIONS IMPLEMENTED IN THIS LIBRARY                   //
@@ -24,7 +25,7 @@
 
 // HELPER FUNCTIONS TO TIME AND VALIDATE (COULD BE MOVED OUT OF THIS LIBRARY) //
 int timeval_subtract(struct timeval *result, struct timeval *t2, struct timeval *t1);
-template<class T> bool validate(const unsigned int size, T* arr_a, T* arr_b);
+template<class T> bool validate(const unsigned int, T*, T*, bool=false);
 template<class T> T sum(const unsigned int, T* );
 void matprint(const unsigned int, const unsigned int, int* );
 void matprint(const unsigned int, const unsigned int, float* );
@@ -32,7 +33,7 @@ void matprint(const unsigned int, const unsigned int, double* );
 
 // MATRIX TRANSPOSITION (ASS3 TASK1)                                          //
 template<class T> void transpose_cpu( const unsigned int, const unsigned int, T*, T*);
-template<class T> void transpose_gpu( const unsigned int, const unsigned int, T*, T*, bool naive=false);
+template<class T> void transpose_gpu( const unsigned int, const unsigned int, T*, T*, const unsigned int tile_size=0, bool naive=false);
 
 // MATRIX ACCUMULATION FUNCTION (ASS3 TASK2)                                  //
 template<class T> void matrix_accfun_cpu(const unsigned int, const unsigned int, T*, T*);       
@@ -80,10 +81,15 @@ int timeval_subtract(struct timeval *result, struct timeval *t2, struct timeval 
  *                                                                *
  */
 template<class T>
-bool validate(const unsigned int size, T* arr_a, T* arr_b){
+bool validate(const unsigned int size, T* arr_a, T* arr_b, bool verbose){
     bool success = true;
+    T diff;
     for (int i=0; i < size; i++) {
-        success &= ( abs( arr_a[i] - arr_b[i] ) < EPSILON );
+        diff = abs(arr_a[i] - arr_b[i]);
+        if ( diff > EPSILON ) {
+            success = false;
+            if (verbose) printf("@%d: %f - %f = %f\n",i, arr_a[i], arr_b[i], diff);
+        }
     }
     return success;
 }
@@ -175,12 +181,10 @@ template<class T> void transpose_gpu( const unsigned int    rows_in,
                                       const unsigned int    cols_in,
                                       T*                    h_in,        // host
                                       T*                    h_out,       // host
+                                      const unsigned int    tile_size,
                                       bool                  naive        // optimal, unless specified
 ){
     const unsigned int d_size = rows_in * cols_in;
-    dim3 block_size;
-    block_size.x = floor(sqrt(BLOCK_SIZE));
-    block_size.y = floor(sqrt(BLOCK_SIZE));
     
     // allocate device arrays
     T *d_in, *d_out;
@@ -191,7 +195,7 @@ template<class T> void transpose_gpu( const unsigned int    rows_in,
     cudaMemcpy( d_in, h_in, d_size*sizeof(T), cudaMemcpyHostToDevice);
 
     // solve problem using device (implementation in devlib.cu.h)
-    transpose<T>(block_size, rows_in, cols_in, d_in, d_out, naive);
+    transpose<T>(rows_in, cols_in, d_in, d_out, tile_size, naive);
 
     // copy result back from device
     cudaMemcpy( h_out, d_out, d_size*sizeof(T), cudaMemcpyDeviceToHost);

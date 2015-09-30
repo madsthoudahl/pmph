@@ -3,61 +3,161 @@
 
 #include <cuda_runtime.h>
 
+#define TILE_SIZE 32      // MUST BE DIVISIBLE BY 8
+#define BLOCK_SIZE 512    // SMALLER THAN 1025, AND DIVISIBLE BY 32
 
 /*******************************************************************************
  *  ASSIGNMENT 3 KERNELS                                                       *
  ******************************************************************************/
 
 // ASS3 TASK1 -  MATRIX TRANSPOSITION                                         //
+// Implement a “naive” transpose in CUDA, i.e., write a two-dimensional CUDA
+// kernel that exploits both N and M dimensions of parallelism and which 
+// performs the transposition much in the way shown in the pseudo-code
 template<class T> __global__ void 
-transpose_naive_kernel( const unsigned int rows_in, const unsigned int cols_in, T* d_in, T* d_out ){
-    // TODO fix implementation
-    // Implement a “naive” transpose in CUDA, i.e., write a two-dimensional CUDA
-    // kernel that exploits both N and M dimensions of parallelism and which 
-    // performs the transposition much in the way shown in the pseudo-code
-    const unsigned int row_size = cols_in;
-    const unsigned int col_size = rows_in;
+transpose_naive_kernel( const unsigned int cols_out, const unsigned int cols_in, T* d_in, T* d_out ){
+    // NOTE THAT rows_out = cols_in AND cols_out = rows_in;
 
     const unsigned int xid = blockIdx.x * blockDim.x + threadIdx.x;
     const unsigned int yid = blockIdx.y * blockDim.y + threadIdx.y;
     
-    // map the two 2D indices to a single linear, 1D index
-    int read_idx  = yid * row_size + xid;
-    int write_idx = xid * col_size + yid;
+    int read_idx  = yid * cols_in + xid;
+    int write_idx = xid * cols_out + yid;
 
-    if ( (yid < rows_in) & (xid < cols_in) ) {
+    if ( (yid < cols_out) & (xid < cols_in) ) {
         d_out[write_idx] = d_in[read_idx];
     }
 }
 
 template<class T> __global__ void 
-transpose_opt_kernel( const unsigned int rows_in, const unsigned int cols_in, T* d_in, T* d_out ){
-    // TODO fix implementation
-    extern __shared__ T shared_mem[]; // size known at runtime, and provided in call from devlib.cu.h
-    const unsigned int row_size = cols_in;
-    const unsigned int col_size = rows_in;
+transpose_opt_kernel( const unsigned int cols_out, const unsigned int cols_in, T* d_in, T* d_out ){
+    // NOTE THAT rows_out = cols_in AND cols_out = rows_in;
+    __shared__ T tile[TILE_SIZE][TILE_SIZE+1]; // OFFSET TO COALESCE MEMORY READS
 
-    const unsigned int xid = blockIdx.x * blockDim.x + threadIdx.x;
-    const unsigned int yid = blockIdx.y * blockDim.y + threadIdx.y;
+    // thread grid position
+    const unsigned int txb = blockIdx.x * blockDim.x ;  //Thread block offset
+    const unsigned int tyb = blockIdx.y * blockDim.y ;
+
+    // calculate flattened index into global array
+    const unsigned int in_idx  =  (tyb + threadIdx.y) * cols_in + txb + threadIdx.x ;
+    //const unsigned int out_idx =  (txb + blockIdx.y) * cols_out + threadIdx.x;
+    const unsigned int out_idx =  (txb + blockIdx.y) * cols_out + threadIdx.x;
+
+    if ( ((txb + threadIdx.x) < cols_in) & ((tyb + threadIdx.y) < cols_out) )
+        tile[threadIdx.x][threadIdx.y] = d_in[in_idx];
+
+    __syncthreads();
+
+    if ( ((txb + threadIdx.x) < cols_out) & ((tyb + threadIdx.y) < cols_in) )
+        d_out[out_idx] = tile[threadIdx.y][threadIdx.x];
+}
+
     
-    int global_read_idx  = yid * row_size + xid;
-    int global_write_idx = xid * col_size + yid;
 
-    int local_read_idx   = blockDim.y * threadIdx.x + threadIdx.y;
-    int local_write_idx  = blockDim.x * threadIdx.y + threadIdx.x;
+template<class T> __global__ void 
+transpose_opt_kernel_old( const unsigned int cols_out, const unsigned int cols_in, T* d_in, T* d_out ){
+    // NOTE THAT rows_out = cols_in AND cols_out = rows_in;
+    __shared__ T tile_mem[TILE_SIZE][TILE_SIZE+1]; // MEMORY BANK FIX
 
-    if ((yid < cols_in) & (xid < rows_in)) {
-        shared_mem[local_write_idx] = d_in[global_read_idx];
+    // calculate indexing into global array
+    unsigned int x = blockIdx.x * blockDim.x + threadIdx.x;
+    unsigned int y = blockIdx.y * blockDim.x + threadIdx.y;
+
+    //if ((y < cols_out) & (x < cols_in)) {
+
+    if ((y < cols_out) & (x < cols_in)) {
+        tile_mem[threadIdx.y][threadIdx.x]  = d_in[y * cols_in + x];
     }
-    __syncthreads(); // syncronize
 
-    if ((yid < cols_in) & (xid < rows_in)) {
-        d_out[global_write_idx] = shared_mem[local_read_idx];
+    // wait for all threads in block to read before writing
+    __syncthreads();
+    
+    // transpose global indexing
+    x = blockIdx.y * blockDim.x + threadIdx.x;
+    y = blockIdx.x * blockDim.x + threadIdx.y;
+
+    if ((y < cols_in) & (x < cols_out)) {
+    //if (inside) {
+        d_out[y * cols_out + x] = tile_mem[threadIdx.x][threadIdx.y];
     }
+    
 
 }
 
-// ASS3 TASK2 -  MATRIX MULTIPLICATION                                        //
+template<class T> __global__ void 
+transpose_opt_loop_kernel( const unsigned int cols_out, const unsigned int cols_in, T* d_in, T* d_out ){
+    // found inspiration @ 
+    // http://devblogs.nvidia.com/parallelforall/efficient-matrix-transpose-cuda-cc/
+    // NOTE THAT rows_out = cols_in AND cols_out = rows_in;
+    __shared__ T tile_mem[TILE_SIZE][TILE_SIZE+1]; // OFFSET TO COALESCE MEMORY READS
+
+    const unsigned int x_in = blockIdx.x * TILE_SIZE + threadIdx.x;
+    const unsigned int y_in = blockIdx.y * TILE_SIZE + threadIdx.y;
+
+    //bool working = ((y_in < cols_out) & (x_in < cols_in));
+
+    for (int i=0; i<TILE_SIZE; i+=blockDim.y) {
+        if ((y_in+i < cols_out) & (x_in < cols_in)) {
+            tile_mem[threadIdx.y + i][threadIdx.x]  = d_in[(y_in+i) * cols_in + x_in];
+        }
+    }
+
+    // wait for all threads in block to read before writing
+    __syncthreads();
+    
+    // transpose indexing
+    const unsigned int x_out = blockIdx.y * TILE_SIZE+ threadIdx.x;
+    const unsigned int y_out = blockIdx.x * TILE_SIZE+ threadIdx.y;
+
+    for (int i=0; i<TILE_SIZE; i+=blockDim.y) {
+        if ((y_out+i < cols_in) & (x_out < cols_out)) {
+            d_out[(y_out+i) * cols_out + x_out] = tile_mem[threadIdx.x][threadIdx.y + i];
+        }
+    }
+}
+
+
+/*
+template<class T> __global__ void 
+transpose_opt_kernel_from_web( const unsigned int cols_out, const unsigned int cols_in, T* d_in, T* d_out ){
+
+  __shared__ float tile[TILE_DIM][TILE_DIM];
+
+  int x = blockIdx.x * TILE_DIM + threadIdx.x;
+  int y = blockIdx.y * TILE_DIM + threadIdx.y;
+  int width = gridDim.x * TILE_DIM;
+
+  for (int j = 0; j < TILE_DIM; j += BLOCK_ROWS)
+     tile[threadIdx.y+j][threadIdx.x] = idata[(y+j)*width + x];
+
+  __syncthreads();
+
+  x = blockIdx.y * TILE_DIM + threadIdx.x;  // transpose block offset
+  y = blockIdx.x * TILE_DIM + threadIdx.y;
+
+  for (int j = 0; j < TILE_DIM; j += BLOCK_ROWS)
+     odata[(y+j)*width + x] = tile[threadIdx.x][threadIdx.y + j];
+}
+*/
+
+template<class T> __global__ void 
+mat_acc_kernel_first( const unsigned int rows_in, const unsigned int cols_in, T* d_in, T* d_out )
+{
+    // TODO BEWARE OF BAD INDEXING!!
+    int gid = blockIdx.x * blockDim.x + threadIdx.x;
+    T accum =  d_in[cols_in*gid]*d_in[cols_in*gid];
+    T tmp;
+    d_out[cols_in*gid] = accum;
+    for (int i=1; i < rows_in; i++) {
+        tmp    = d_in[gid * cols_in + i + rows_in];
+        accum  = sqrt(accum) + tmp*tmp
+        d_out[cols_in*gid+i] = accum;
+    }
+}
+
+
+
+// ASS3 TASK2 -  MATRIX ACCUMULATOR                                           //
 
 // ASS3 TASK3 -  MATRIX MULTIPLICATION                                        //
 
