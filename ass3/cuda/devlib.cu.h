@@ -406,9 +406,8 @@ template<class T> void transpose( dim3               block_size,
     if (naive) {
         transpose_naive_kernel<<< grid_size, block_size >>> (rows_in, cols_in, d_in, d_out);
     } else {
-        //unsigned int sh_mem_size = block_size * sizeof(T); // USED ?? TODO
-        printf("transpose_opt_kernel in devkernels.cu.h not yet implemented\n");
-        transpose_opt_kernel<<< grid_size, block_size >>> (rows_in, cols_in, d_in, d_out);
+        const unsigned int sh_mem_size = block_size.x * block_size.y * sizeof(T); 
+        transpose_opt_kernel<<< grid_size, block_size, sh_mem_size >>> (rows_in, cols_in, d_in, d_out);
     }
 
 }

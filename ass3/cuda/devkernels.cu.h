@@ -21,26 +21,40 @@ transpose_naive_kernel( const unsigned int rows_in, const unsigned int cols_in, 
     const unsigned int xid = blockIdx.x * blockDim.x + threadIdx.x;
     const unsigned int yid = blockIdx.y * blockDim.y + threadIdx.y;
     
-    //int grid_width  = gridDim.x * blockDim.x;
-    //int grid_height = gridDim.y * blockDim.y;
-    
     // map the two 2D indices to a single linear, 1D index
     int read_idx  = yid * row_size + xid;
     int write_idx = xid * col_size + yid;
 
     if ( (yid < rows_in) & (xid < cols_in) ) {
-        d_out[s_idx] = d_in[l_idx];
+        d_out[write_idx] = d_in[read_idx];
     }
 }
 
 template<class T> __global__ void 
 transpose_opt_kernel( const unsigned int rows_in, const unsigned int cols_in, T* d_in, T* d_out ){
     // TODO fix implementation
-    const unsigned int xid = blockIdx.x*blockDim.x + threadIdx.x;
-    const unsigned int yid = blockIdx.y*blockDim.y + threadIdx.y;
+    extern __shared__ T shared_mem[]; // size known at runtime, and provided in call from devlib.cu.h
+    const unsigned int row_size = cols_in;
+    const unsigned int col_size = rows_in;
+
+    const unsigned int xid = blockIdx.x * blockDim.x + threadIdx.x;
+    const unsigned int yid = blockIdx.y * blockDim.y + threadIdx.y;
+    
+    int global_read_idx  = yid * row_size + xid;
+    int global_write_idx = xid * col_size + yid;
+
+    int local_read_idx   = blockDim.y * threadIdx.x + threadIdx.y;
+    int local_write_idx  = blockDim.x * threadIdx.y + threadIdx.x;
+
     if ((yid < cols_in) & (xid < rows_in)) {
-        d_out[yid*rows_in+xid] = d_in[xid*cols_in+yid] * 2;
+        shared_mem[local_write_idx] = d_in[global_read_idx];
     }
+    __syncthreads(); // syncronize
+
+    if ((yid < cols_in) & (xid < rows_in)) {
+        d_out[global_write_idx] = shared_mem[local_read_idx];
+    }
+
 }
 
 // ASS3 TASK2 -  MATRIX MULTIPLICATION                                        //

@@ -9,3 +9,6 @@
 
 # Videolessons
 Videolessons/*
+
+# swap files used by vim
+*.swp
