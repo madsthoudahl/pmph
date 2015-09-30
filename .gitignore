@@ -1,0 +1,11 @@
+# latex buildfiles 
+*.log
+*.aux
+*.pdf
+*.backup
+
+#handins
+/**/handin/
+
+# Videolessons
+Videolessons/*
