@@ -15,15 +15,20 @@ transpose_naive_kernel( const unsigned int rows_in, const unsigned int cols_in, 
     // Implement a “naive” transpose in CUDA, i.e., write a two-dimensional CUDA
     // kernel that exploits both N and M dimensions of parallelism and which 
     // performs the transposition much in the way shown in the pseudo-code
-    const unsigned int xid = blockIdx.x*blockDim.x + threadIdx.x;
-    const unsigned int yid = blockIdx.y*blockDim.y + threadIdx.y;
-    // map the two 2D indices to a single linear, 1D index
-    int grid_width  = gridDim.x * blockDim.x;
-    int grid_height = gridDim.y * blockDim.y;
-    int l_idx = yid * grid_width  + xid;
-    int s_idx = xid * grid_height + yid;
+    const unsigned int row_size = cols_in;
+    const unsigned int col_size = rows_in;
 
-    if ((yid < cols_in) & (xid < rows_in)) {
+    const unsigned int xid = blockIdx.x * blockDim.x + threadIdx.x;
+    const unsigned int yid = blockIdx.y * blockDim.y + threadIdx.y;
+    
+    //int grid_width  = gridDim.x * blockDim.x;
+    //int grid_height = gridDim.y * blockDim.y;
+    
+    // map the two 2D indices to a single linear, 1D index
+    int read_idx  = yid * row_size + xid;
+    int write_idx = xid * col_size + yid;
+
+    if ( (yid < rows_in) & (xid < cols_in) ) {
         d_out[s_idx] = d_in[l_idx];
     }
 }
