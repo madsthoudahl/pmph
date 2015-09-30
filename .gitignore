@@ -1,14 +1,21 @@
 # latex buildfiles 
-*.log
-*.aux
-*.pdf
-*.backup
+/**/tex/*.log
+/**/tex/*.aux
+/**/tex/*.pdf
+/**/tex/*.backup
 
 #handins
 /**/handin/
+ass3/cuda/test
+ass2/Haskell/PrimesQuicksort
 
-# Videolessons
+# Videolessons and teaching materials
 Videolessons/*
-
+Lecture notes and slides/*
+device info.odt
 # swap files used by vim
 *.swp
+
+# Haskell build files
+*.hi
+*.o
