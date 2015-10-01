@@ -8,7 +8,6 @@
 #include <math.h>
 #include <stdlib.h>
 
-//#define BLOCK_SIZE 512
 #define EPSILON 0.005
 
 //****************************************************************************//
@@ -45,7 +44,6 @@ int maxSegmentSum_gpu( const unsigned int, int*);
 // SPARSE MATRIX VECTOR MULTIPLICATION  (ASS2 PART1 TASK3)                    //
 void spMatVecMult_gpu( const unsigned int, int*, int*, float*, float*, const unsigned int, float*);
 
-
 // HELPER FUNCTIONS TO TIME AND VALIDATE (COULD BE MOVED OUT OF THIS LIBRARY) //
 int timeval_subtract(struct timeval *result, struct timeval *t2, struct timeval *t1);
 template<class T> bool validate(const unsigned int, T*, T*, bool=false);
@@ -53,6 +51,7 @@ template<class T> T sum(const unsigned int, T* );
 void matprint(const unsigned int, const unsigned int, int* );
 void matprint(const unsigned int, const unsigned int, float* );
 void matprint(const unsigned int, const unsigned int, double* );
+template<class T> void mprinter(const unsigned int rows_in, const unsigned int cols_in, T start);
 
 
 
@@ -506,6 +505,11 @@ void spMatVecMult_gpu( const unsigned int size,
 
 
 
+
+
+
+
+
 /******************************************************************************/
 /* HELPER FUNCTIONS - SUPPORTING ACTUAL IMPLEMENTATION                        */
 /******************************************************************************/
@@ -598,6 +602,37 @@ void matprint(const unsigned int rows, const unsigned int cols, double* arr ){
     printf("\n");
 }
 
+
+
+
+
+
+template<class T> void mprinter(const unsigned int rows_in, const unsigned int cols_in, T start)
+{
+    const unsigned int size = rows_in * cols_in;
+
+    const unsigned int rows_out = cols_in;
+    const unsigned int cols_out = rows_in;
+
+    T* arr_in  = (T*) malloc( size * sizeof(T) );
+    T* arr_out = (T*) malloc( size * sizeof(T) );
+    T acc = start;
+
+    for(unsigned int i=0; i<size; i++) {
+        arr_in[i] = acc;
+        acc += i;
+    }
+
+    transpose_cpu<T>( rows_in, cols_in, arr_in, arr_out);
+
+    printf("\nMATRIX PRINTER:\n");
+    printf("For testpurposes a matrix is printed, transposed and printed again.\n");
+    matprint(rows_in, cols_in, arr_in);
+    matprint(rows_out, cols_out, arr_out);
+
+    free(arr_in);
+    free(arr_out);
+}
 
 
 #endif // HOST_LIB
