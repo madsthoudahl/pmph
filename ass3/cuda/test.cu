@@ -190,7 +190,7 @@ void task_one(bool print){
 
 
 
-void task_two(){
+void task_two(bool print){
     printf("\nASSIGNMENT3 TASK2: MATRIX TRANSPOSITION AS PREPROCESSING\n");
     // Matrix Transposition during or as a pre-computatiion
     // 2 a. Reason about loop-level parallellism 
@@ -229,13 +229,19 @@ void task_two(){
     }
     printf("\nMatrix accfun on size %d x %d on CPU runs in: %lu microsecs\n",cols, rows, elapsed_a);
     
+    if (print) {
+        printf("Matrix accumulation function by cpu (naïve): \n");
+        matprint(cols, rows, m_out_a);
+    }
+
     // TASK 1 B) OMITTED
 
     // TASK 1 C)
     { 
         gettimeofday(&t_start, NULL); 
 
-        matrix_accfun_gpu<float>(cols, rows, m_in, m_out_c, false); 
+	const unsigned char version = 1;
+        matrix_accfun_gpu<float>(cols, rows, m_in, m_out_c, version); 
     
         gettimeofday(&t_end, NULL); 
         timeval_subtract(&t_diff, &t_end, &t_start);
@@ -246,12 +252,17 @@ void task_two(){
     if (valid_c) printf("Implementation is VALID\n");
     else printf("Implementation is INVALID\n");
 
+    if (print) {
+        printf("Matrix accumulation function by gpu (first version): \n");
+        matprint(cols, rows, m_out_c);
+    }
 
     // TASK 1 D)
     { 
         gettimeofday(&t_start, NULL); 
 
-        matrix_accfun_gpu<float>(cols, rows, m_in, m_out_d, true);  
+	const unsigned char version = 2;
+        matrix_accfun_gpu<float>(cols, rows, m_in, m_out_d, version);  
     
         gettimeofday(&t_end, NULL); 
         timeval_subtract(&t_diff, &t_end, &t_start);
@@ -261,6 +272,11 @@ void task_two(){
     printf("\nMatrix accfun on size %d x %d on GPU rewrite runs in: %lu microsecs\n",cols, rows, elapsed_d);
     if (valid_d) printf("Implementation is VALID\n\n");
     else printf("Implementation is INVALID\n\n");
+
+    if (print) {
+        printf("Matrix accumulation function by gpu (second version): \n");
+        matprint(cols, rows, m_out_d);
+    }
 
     // TODO 
     // The modified program (CUDA transpositions included) has about two 

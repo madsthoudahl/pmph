@@ -11,11 +11,12 @@
  ******************************************************************************/
 
 // ASS3 TASK1 -  MATRIX TRANSPOSITION                                         //
-// Implement a “naive” transpose in CUDA, i.e., write a two-dimensional CUDA
-// kernel that exploits both N and M dimensions of parallelism and which 
-// performs the transposition much in the way shown in the pseudo-code
 template<class T> __global__ void 
-transpose_naive_kernel( const unsigned int cols_out, const unsigned int cols_in, T* d_in, T* d_out ){
+transpose_naive_kernel( const unsigned int cols_out, const unsigned int cols_in, T* d_in, T* d_out ) {
+    // Implement a “naive” transpose in CUDA, i.e., write a two-dimensional CUDA
+    // kernel that exploits both N and M dimensions of parallelism and which 
+    // performs the transposition much in the way shown in the pseudo-code
+
     // NOTE THAT rows_out = cols_in AND cols_out = rows_in;
 
     const unsigned int xid = blockIdx.x * blockDim.x + threadIdx.x;
@@ -140,24 +141,55 @@ transpose_opt_kernel_from_web( const unsigned int cols_out, const unsigned int c
 }
 */
 
-template<class T> __global__ void 
-mat_acc_kernel_first( const unsigned int rows_in, const unsigned int cols_in, T* d_in, T* d_out )
-{
-    // TODO BEWARE OF BAD INDEXING!!
-    int gid = blockIdx.x * blockDim.x + threadIdx.x;
-    T accum =  d_in[cols_in*gid]*d_in[cols_in*gid];
-    T tmp;
-    d_out[cols_in*gid] = accum;
-    for (int i=1; i < rows_in; i++) {
-        tmp    = d_in[gid * cols_in + i + rows_in];
-        accum  = sqrt(accum) + tmp*tmp
-        d_out[cols_in*gid+i] = accum;
-    }
-}
-
 
 
 // ASS3 TASK2 -  MATRIX ACCUMULATOR                                           //
+
+template<class T> __global__ void 
+mat_acc_kernel_first( const unsigned int rows_in, const unsigned int cols_in, T* d_in, T* d_out )
+{
+    // Implement quickly a straightforward CUDA version of the program above, 
+    // in which the first loop of index i and count N is executed in parallel, 
+    // i.e., corresponds to a one-dimensional CUDA kernel, and the second one 
+    // is executed sequentially, i.e., it is part of the kernel code
+
+    int gid = blockIdx.x * blockDim.x + threadIdx.x;
+    T accum =  d_in[gid]*d_in[gid];
+    T tmp;
+    d_out[gid] = accum;
+    for (int i=1; i < rows_in; i++) {
+        tmp    = d_in[i * cols_in + gid];
+        accum  = sqrt(accum) + tmp*tmp;
+        d_out[i * cols_in + gid] = accum;
+    }
+}
+
+template<class T> __global__ void 
+mat_acc_kernel_second( const unsigned int rows_in_t, const unsigned int cols_in_t, T* d_in_t, T* d_out_t )
+{
+    // Rewrite quickly the CUDA program such that all accesses to global memory
+    // are coalesced, i.e., the new program reads from the transpose of A, and 
+    // computes the transpose of B:
+    // • transpose A in A', using the optimized CUDA implementation of Task I.1.
+    // • write a CUDA kernel that implements a modified version of the pseudo-
+    //   code above that uses A' instead of A and computes B' (the transpose of B),
+    //   instead of B.
+    // • finally, after the execution of the CUDA kernel, transpose B' to obtain 
+    //   the original result B
+    
+    const unsigned int gid = blockIdx.x * blockDim.x + threadIdx.x;
+    T accum =  d_in_t[gid*cols_in_t] * d_in_t[gid*cols_in_t];
+    T tmp;
+    d_out_t[gid*cols_in_t] = accum;
+    
+    for (int i=1; i < rows_in_t; i++) {
+        tmp    = d_in_t[gid * cols_in_t + i];
+        accum  = sqrt(accum) + tmp*tmp;
+        d_out_t[gid * cols_in_t + i] = accum;
+    }
+
+}
+
 
 // ASS3 TASK3 -  MATRIX MULTIPLICATION                                        //
 

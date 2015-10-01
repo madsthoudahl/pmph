@@ -10,7 +10,6 @@
 
 //#define BLOCK_SIZE 512
 #define EPSILON 0.005
-#define TILE 32
 
 //****************************************************************************//
 // DECLERATION OF ALL FUNCTIONS IMPLEMENTED IN THIS LIBRARY                   //
@@ -33,11 +32,11 @@ void matprint(const unsigned int, const unsigned int, double* );
 
 // MATRIX TRANSPOSITION (ASS3 TASK1)                                          //
 template<class T> void transpose_cpu( const unsigned int, const unsigned int, T*, T*);
-template<class T> void transpose_gpu( const unsigned int, const unsigned int, T*, T*, const unsigned int tile_size=0, bool naive=false);
+template<class T> void transpose_gpu( const unsigned int, const unsigned int, T*, T*, const char version=0, const unsigned int tile_size=0);
 
 // MATRIX ACCUMULATION FUNCTION (ASS3 TASK2)                                  //
 template<class T> void matrix_accfun_cpu(const unsigned int, const unsigned int, T*, T*);       
-template<class T> void matrix_accfun_gpu(const unsigned int, const unsigned int, T*, T*, bool);       
+template<class T> void matrix_accfun_gpu(const unsigned int, const unsigned int, T*, T*, const char version=0, const unsigned int block_size=0 );   
 
 // MATRIX MULTIPLICATION (ASS3 TASK3)                                         //
 template<class T> void matmult_cpu(const unsigned int, const unsigned int, T*, const unsigned int, const unsigned int, T*, T*);
@@ -159,8 +158,11 @@ void matprint(const unsigned int rows, const unsigned int cols, double* arr ){
  * m_in       input matrix array                                               *
  * m_out      output matrix array                                              *
  *                                                                             *
- * naive      boolean value to describe wether a naive or                      *
- *            optimal solution is requested                                    *
+ * (version)  char (small int) value to describe which implemented version     *
+ *            to apply: std=0 is optimal   (GPU only)                          *
+ *                                                                             *
+ * (tile_size)integer which defines tile side dimension max 32                 *
+ *            tile_size^2 becomes block_size in version 2                      *
  *                                                                             *
  */
 /** SEQUENTIAL (ON CPU) **/
@@ -181,8 +183,8 @@ template<class T> void transpose_gpu( const unsigned int    rows_in,
                                       const unsigned int    cols_in,
                                       T*                    h_in,        // host
                                       T*                    h_out,       // host
-                                      const unsigned int    tile_size,
-                                      bool                  naive        // optimal, unless specified
+                                      const char            version,   
+                                      const unsigned int    tile_size
 ){
     const unsigned int d_size = rows_in * cols_in;
     
@@ -195,7 +197,7 @@ template<class T> void transpose_gpu( const unsigned int    rows_in,
     cudaMemcpy( d_in, h_in, d_size*sizeof(T), cudaMemcpyHostToDevice);
 
     // solve problem using device (implementation in devlib.cu.h)
-    transpose<T>(rows_in, cols_in, d_in, d_out, tile_size, naive);
+    transpose<T>(rows_in, cols_in, d_in, d_out, version, tile_size);
 
     // copy result back from device
     cudaMemcpy( h_out, d_out, d_size*sizeof(T), cudaMemcpyDeviceToHost);
@@ -224,8 +226,8 @@ template<class T> void transpose_gpu( const unsigned int    rows_in,
  * h_in       input matrix array   (host mem)                                  *
  * h_out      output matrix array  (host mem)                                  *
  *                                                                             *
- * (second)   boolean value to describe wether second or                       *
- *            first solution is requested if on GPU                            *
+ * (version)  char (small int) value to describe which version to be used      *
+ *            std=0 is optimal version   (GPU only)                            *
  *                                                                             *
  */
 template<class T> 
@@ -236,26 +238,26 @@ void matrix_accfun_cpu( int rows_in,
 ) {
     T accum, tmp;
     for (int i=0 ; i<rows_in ; i++) {
-        accum =  h_in[i*rows_in] * h_in[i*rows_in];
-	h_out[i*rows_in] = accum;
+        accum =  h_in[i] * h_in[i];
+	h_out[i] = accum;
 	for (int j=1 ; j<cols_in ; j++ ) {
-	    tmp   = h_in[i*rows_in + j];
+	    tmp   = h_in[i + j * cols_in];
 	    accum = sqrt(accum) + tmp * tmp;
-	    h_out[i*rows_in + j] = accum;
+	    h_out[i + j * cols_in] = accum;
 	}
     }
     return;
 }
 
 template<class T> 
-void matrix_accfun_gpu( int rows_in, 
-                        int cols_in, 
-                        T* h_in, 
-                        T* h_out, 
-                        bool second=true
+void matrix_accfun_gpu( const unsigned int   rows_in, 
+                        const unsigned int   cols_in, 
+                        T*                   h_in, 
+                        T*                   h_out, 
+                        const char           version,
+                        const unsigned int   block_size
 ) {    
     const unsigned int d_size = rows_in * cols_in;
-    const unsigned int block_size = BLOCK_SIZE;
     
     // allocate device arrays
     T *d_in, *d_out;
@@ -266,11 +268,7 @@ void matrix_accfun_gpu( int rows_in,
     cudaMemcpy( d_in, h_in, d_size * sizeof(T), cudaMemcpyHostToDevice);
 
     // solve problem using device (implementation in devlib.cu.h)
-    if (second) {
-        matrix_accfun_second<T>(block_size, rows_in, cols_in, d_in, d_out);
-    } else {
-        matrix_accfun_first<T>(block_size, rows_in, cols_in, d_in, d_out);
-    }
+    matrix_accfun<T>(rows_in, cols_in, d_in, d_out, version, block_size);
 
     // copy result back from device
     cudaMemcpy( h_out, d_out, d_size*sizeof(T), cudaMemcpyDeviceToHost);
