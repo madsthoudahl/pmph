@@ -11,9 +11,8 @@
 #define MTEST 4
 #define NTEST 6
 // task one specific
-#define ROWS_M 2353
-#define COLS_N 1235
-#define TILE_SIZE 32
+#define ROWS_M (1*1024)
+#define COLS_N (1*1024)
 // task two specific
 #define M2 64 // As per assignment
 #define N2 8
@@ -29,15 +28,15 @@
 int warmup();
 template<class T> void mprinter(T);
 void task_one(bool);
-void task_two();
+void task_two(bool);
 void task_three();
 
 
 int main(int argc, char** argv) {
     warmup(); // sole purpose is 'warming up GPU' so that timings get valid downstream.
     mprinter(1);
-    task_one(false);
-    //task_two();
+    //task_one(false);
+    task_two(true);
     //task_three();
     return 0;
 }
@@ -97,7 +96,7 @@ void task_one(bool print){
     // initiate data to transpose (dense matrix)
     const unsigned int rows = ROWS_M;
     const unsigned int cols = COLS_N;
-    const unsigned int tile_size = TILE_SIZE;
+    //const unsigned int tile_size = TILE_SIZE;
     const unsigned int arr_size = rows * cols;
 
     float *m_in, *m_out_a, *m_out_c, *m_out_d;
@@ -117,67 +116,45 @@ void task_one(bool print){
 
     // initiate timing variable, keep results for validation
     unsigned long int elapsed_a, elapsed_c, elapsed_d;
-    struct timeval t_start, t_end, t_diff;
     bool valid_c, valid_d; 
     
     // TASK 1 A)
-    { 
-        gettimeofday(&t_start, NULL); 
-
-        transpose_cpu<float>( rows, cols, m_in, m_out_a);
-    
-        gettimeofday(&t_end, NULL); 
-        timeval_subtract(&t_diff, &t_end, &t_start);
-        elapsed_a = (t_diff.tv_sec*1e6+t_diff.tv_usec); 
-    }
+    elapsed_a = transpose_cpu<float>( rows, cols, m_in, m_out_a);
     printf("\nTranspose Matrix sized %d x %d on CPU runs in: %lu microsecs\n", cols, rows, elapsed_a);
     
-    if (print) {
-        printf("Matrix after transposition by cpu: \n");
-        matprint(cols, rows, m_out_a);
-    }
     // TASK 1 B) OMITTED
 
     // TASK 1 C)
     { 
-        gettimeofday(&t_start, NULL); 
-
-        transpose_gpu<float>( rows, cols, m_in, m_out_c, tile_size, true);
-    
-        gettimeofday(&t_end, NULL); 
-        timeval_subtract(&t_diff, &t_end, &t_start);
-        elapsed_c = (t_diff.tv_sec*1e6+t_diff.tv_usec); 
-	valid_c = validate<float>(arr_size, m_out_a, m_out_c);
+        const unsigned char naive_version = 1;
+        elapsed_c = transpose_gpu<float>( rows, cols, m_in, m_out_c, naive_version);
+	valid_c   = validate<float>(arr_size, m_out_a, m_out_c);
     }
     printf("\nTranspose Matrix sized %d x %d on GPU naïvely runs in: %lu microsecs\n", cols, rows, elapsed_c);
     if (valid_c) printf("Naïve implementation is VALID\n");
     else printf("Naïve implementation is INVALID\n");
 
-    if (print) {
-        printf("Matrix after transposition by gpu (naive): \n");
-        matprint(cols, rows, m_out_c);
-    }
 
     // TASK 1 D)
     { 
-        gettimeofday(&t_start, NULL); 
-
-        transpose_gpu<float>( rows, cols, m_in, m_out_d, tile_size, false);
-    
-        gettimeofday(&t_end, NULL); 
-        timeval_subtract(&t_diff, &t_end, &t_start);
-        elapsed_d = (t_diff.tv_sec*1e6+t_diff.tv_usec); 
-	valid_d = validate<float>(arr_size, m_out_a, m_out_d);
+        const unsigned char opt_version = 2;
+        elapsed_d = transpose_gpu<float>( rows, cols, m_in, m_out_d, opt_version);
+	valid_d   = validate<float>(arr_size, m_out_a, m_out_d);
     }
     printf("\nTranspose Matrix sized %d x %d on GPU optimized runs in: %lu microsecs\n", cols, rows, elapsed_d);
     if (valid_d) printf("Optimal implementation is VALID\n\n");
     else printf("Optimal implementation is INVALID\n\n");
 
+    // TODO print statistics, speedup difference and so on
+
     if (print) {
+        printf("Matrix after transposition by cpu: \n");
+        matprint(cols, rows, m_out_a);
+        printf("Matrix after transposition by gpu (naive): \n");
+        matprint(cols, rows, m_out_c);
         printf("Matrix after transposition by gpu (opt): \n");
         matprint(cols, rows, m_out_d);
     }
-    // TODO print statistics, speedup difference and so on
 
     free(m_in);
     free(m_out_a);
@@ -209,44 +186,36 @@ void task_two(bool print){
     m_out_d = (float*) malloc(arr_size * sizeof(float));
 
     for (int i=0; i<(arr_size); i++){
-        m_in[i] = (float) i;
+        m_in[i] = 2 ; 
+    }
+
+    if (print) {
+        printf("Matrix accumulation function on following array: \n");
+        matprint( rows, cols, m_in);
     }
 
     // initiate timing variable, keep results for validation
     unsigned long int elapsed_a, elapsed_c, elapsed_d;
-    struct timeval t_start, t_end, t_diff;
     bool valid_c, valid_d; 
     
-    // TASK 1 A)
+    // TASK 2 A)
     { 
-        gettimeofday(&t_start, NULL); 
-
-        matrix_accfun_cpu(cols, rows, m_in, m_out_a);
-    
-        gettimeofday(&t_end, NULL); 
-        timeval_subtract(&t_diff, &t_end, &t_start);
-        elapsed_a = (t_diff.tv_sec*1e6+t_diff.tv_usec); 
+        elapsed_a = matrix_accfun_cpu( rows, cols, m_in, m_out_a);
     }
     printf("\nMatrix accfun on size %d x %d on CPU runs in: %lu microsecs\n",cols, rows, elapsed_a);
     
     if (print) {
         printf("Matrix accumulation function by cpu (naïve): \n");
-        matprint(cols, rows, m_out_a);
+        matprint( rows, cols, m_out_a);
     }
 
-    // TASK 1 B) OMITTED
+    // TASK 2 B) OMITTED
 
-    // TASK 1 C)
+    // TASK 2 C)
     { 
-        gettimeofday(&t_start, NULL); 
-
 	const unsigned char version = 1;
-        matrix_accfun_gpu<float>(cols, rows, m_in, m_out_c, version); 
-    
-        gettimeofday(&t_end, NULL); 
-        timeval_subtract(&t_diff, &t_end, &t_start);
-        elapsed_c = (t_diff.tv_sec*1e6+t_diff.tv_usec); 
-	valid_c = validate<float>(arr_size, m_out_a, m_out_c);
+        elapsed_c = matrix_accfun_gpu<float>(rows, cols, m_in, m_out_c, version); 
+	valid_c   = validate<float>(arr_size, m_out_a, m_out_c);
     }
     printf("\nMatrix accfun on size %d x %d on GPU first impl runs in: %lu microsecs\n",cols, rows, elapsed_c);
     if (valid_c) printf("Implementation is VALID\n");
@@ -254,20 +223,14 @@ void task_two(bool print){
 
     if (print) {
         printf("Matrix accumulation function by gpu (first version): \n");
-        matprint(cols, rows, m_out_c);
+        matprint( rows, cols, m_out_c);
     }
 
-    // TASK 1 D)
+    // TASK 2 D)
     { 
-        gettimeofday(&t_start, NULL); 
-
 	const unsigned char version = 2;
-        matrix_accfun_gpu<float>(cols, rows, m_in, m_out_d, version);  
-    
-        gettimeofday(&t_end, NULL); 
-        timeval_subtract(&t_diff, &t_end, &t_start);
-        elapsed_d = (t_diff.tv_sec*1e6+t_diff.tv_usec); 
-	valid_d = validate<float>(arr_size, m_out_a, m_out_d);
+        elapsed_d = matrix_accfun_gpu<float>(rows, rows, m_in, m_out_d, version);  
+	valid_d   = validate<float>(arr_size, m_out_a, m_out_d);
     }
     printf("\nMatrix accfun on size %d x %d on GPU rewrite runs in: %lu microsecs\n",cols, rows, elapsed_d);
     if (valid_d) printf("Implementation is VALID\n\n");
@@ -275,7 +238,7 @@ void task_two(bool print){
 
     if (print) {
         printf("Matrix accumulation function by gpu (second version): \n");
-        matprint(cols, rows, m_out_d);
+        matprint(rows, rows, m_out_d);
     }
 
     // TODO 
@@ -328,49 +291,30 @@ void task_three(){
 
     // initiate timing variable, keep results for validation
     unsigned long int elapsed_a, elapsed_c, elapsed_d;
-    struct timeval t_start, t_end, t_diff;
     bool valid_c, valid_d; 
     
-    // TASK 1 A)
+    // TASK 3 A)
     { 
-        gettimeofday(&t_start, NULL); 
-
-        matmult_cpu<float>(a_rows, a_cols, m_in_a, b_rows, b_cols, m_in_b, m_out_a);
-    
-        gettimeofday(&t_end, NULL); 
-        timeval_subtract(&t_diff, &t_end, &t_start);
-        elapsed_a = (t_diff.tv_sec*1e6+t_diff.tv_usec); 
+        elapsed_a = matmult_cpu<float>(a_rows, a_cols, m_in_a, b_rows, b_cols, m_in_b, m_out_a);
     }
     printf("\nMatrixMult on (%dx%d) x (%d,%d) on CPU runs in: %lu microsecs\n",a_rows, a_cols, b_rows, b_cols, elapsed_a);
     
-    // TASK 1 B) OMITTED
+    // TASK 3 B) OMITTED
 
-    // TASK 1 C)
+    // TASK 3 C)
     { 
-        gettimeofday(&t_start, NULL); 
-
-        matmult_gpu<float>(a_rows, a_cols, m_in_a, b_rows, b_cols, m_in_b, m_out_a, false);
-    
-        gettimeofday(&t_end, NULL); 
-        timeval_subtract(&t_diff, &t_end, &t_start);
-        elapsed_c = (t_diff.tv_sec*1e6+t_diff.tv_usec); 
-	valid_c = validate(res_size, m_out_a, m_out_c);
+        elapsed_c = matmult_gpu<float>(a_rows, a_cols, m_in_a, b_rows, b_cols, m_in_b, m_out_a, false);
+	valid_c   = validate(res_size, m_out_a, m_out_c);
     }
     printf("\nMatrixMult on (%dx%d) x (%d,%d) on GPU runs in: %lu microsecs\n",a_rows, a_cols, b_rows, b_cols, elapsed_c);
     if (valid_c) printf("Implementation is VALID\n");
     else printf("Implementation is INVALID\n");
 
 
-    // TASK 1 D)
+    // TASK 3 D)
     { 
-        gettimeofday(&t_start, NULL); 
-
-        matmult_gpu(a_rows, a_cols, m_in_a, b_rows, b_cols, m_in_b, m_out_a, true);
-    
-        gettimeofday(&t_end, NULL); 
-        timeval_subtract(&t_diff, &t_end, &t_start);
-        elapsed_d = (t_diff.tv_sec*1e6+t_diff.tv_usec); 
-	valid_d = validate(res_size, m_out_a, m_out_d);
+        elapsed_d = matmult_gpu(a_rows, a_cols, m_in_a, b_rows, b_cols, m_in_b, m_out_a, true);
+	valid_d   = validate(res_size, m_out_a, m_out_d);
     }
     printf("\nMatrixMult on (%dx%d) x (%d,%d) on CPU runs in: %lu microsecs\n",a_rows, a_cols, b_rows, b_cols, elapsed_d);
     if (valid_d) printf("Optimal Implementation is VALID\n\n");

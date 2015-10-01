@@ -30,35 +30,19 @@ transpose_naive_kernel( const unsigned int cols_out, const unsigned int cols_in,
     }
 }
 
+
+
+
+
+
+
+
+
 template<class T> __global__ void 
 transpose_opt_kernel( const unsigned int cols_out, const unsigned int cols_in, T* d_in, T* d_out ){
     // NOTE THAT rows_out = cols_in AND cols_out = rows_in;
-    __shared__ T tile[TILE_SIZE][TILE_SIZE+1]; // OFFSET TO COALESCE MEMORY READS
-
-    // thread grid position
-    const unsigned int txb = blockIdx.x * blockDim.x ;  //Thread block offset
-    const unsigned int tyb = blockIdx.y * blockDim.y ;
-
-    // calculate flattened index into global array
-    const unsigned int in_idx  =  (tyb + threadIdx.y) * cols_in + txb + threadIdx.x ;
-    //const unsigned int out_idx =  (txb + blockIdx.y) * cols_out + threadIdx.x;
-    const unsigned int out_idx =  (txb + blockIdx.y) * cols_out + threadIdx.x;
-
-    if ( ((txb + threadIdx.x) < cols_in) & ((tyb + threadIdx.y) < cols_out) )
-        tile[threadIdx.x][threadIdx.y] = d_in[in_idx];
-
-    __syncthreads();
-
-    if ( ((txb + threadIdx.x) < cols_out) & ((tyb + threadIdx.y) < cols_in) )
-        d_out[out_idx] = tile[threadIdx.y][threadIdx.x];
-}
-
-    
-
-template<class T> __global__ void 
-transpose_opt_kernel_old( const unsigned int cols_out, const unsigned int cols_in, T* d_in, T* d_out ){
-    // NOTE THAT rows_out = cols_in AND cols_out = rows_in;
-    __shared__ T tile_mem[TILE_SIZE][TILE_SIZE+1]; // MEMORY BANK FIX
+    // NOTE ALSO blockDim.x = blockDim.y = TILE_SIZE
+    __shared__ T tile_mem[TILE_SIZE][TILE_SIZE+1]; // MEMORY BANK FIX ??
 
     // calculate indexing into global array
     unsigned int x = blockIdx.x * blockDim.x + threadIdx.x;
@@ -82,8 +66,14 @@ transpose_opt_kernel_old( const unsigned int cols_out, const unsigned int cols_i
         d_out[y * cols_out + x] = tile_mem[threadIdx.x][threadIdx.y];
     }
     
-
 }
+
+
+
+
+
+
+
 
 template<class T> __global__ void 
 transpose_opt_loop_kernel( const unsigned int cols_out, const unsigned int cols_in, T* d_in, T* d_out ){
@@ -118,31 +108,6 @@ transpose_opt_loop_kernel( const unsigned int cols_out, const unsigned int cols_
 }
 
 
-/*
-template<class T> __global__ void 
-transpose_opt_kernel_from_web( const unsigned int cols_out, const unsigned int cols_in, T* d_in, T* d_out ){
-
-  __shared__ float tile[TILE_DIM][TILE_DIM];
-
-  int x = blockIdx.x * TILE_DIM + threadIdx.x;
-  int y = blockIdx.y * TILE_DIM + threadIdx.y;
-  int width = gridDim.x * TILE_DIM;
-
-  for (int j = 0; j < TILE_DIM; j += BLOCK_ROWS)
-     tile[threadIdx.y+j][threadIdx.x] = idata[(y+j)*width + x];
-
-  __syncthreads();
-
-  x = blockIdx.y * TILE_DIM + threadIdx.x;  // transpose block offset
-  y = blockIdx.x * TILE_DIM + threadIdx.y;
-
-  for (int j = 0; j < TILE_DIM; j += BLOCK_ROWS)
-     odata[(y+j)*width + x] = tile[threadIdx.x][threadIdx.y + j];
-}
-*/
-
-
-
 // ASS3 TASK2 -  MATRIX ACCUMULATOR                                           //
 
 template<class T> __global__ void 
@@ -152,15 +117,17 @@ mat_acc_kernel_first( const unsigned int rows_in, const unsigned int cols_in, T*
     // in which the first loop of index i and count N is executed in parallel, 
     // i.e., corresponds to a one-dimensional CUDA kernel, and the second one 
     // is executed sequentially, i.e., it is part of the kernel code
-
+    // ROWS = 64  COLS = 8
     int gid = blockIdx.x * blockDim.x + threadIdx.x;
-    T accum =  d_in[gid]*d_in[gid];
-    T tmp;
-    d_out[gid] = accum;
-    for (int i=1; i < rows_in; i++) {
-        tmp    = d_in[i * cols_in + gid];
-        accum  = sqrt(accum) + tmp*tmp;
-        d_out[i * cols_in + gid] = accum;
+    if (gid < cols_in) {
+        T accum =  d_in[gid]*d_in[gid];
+        T tmp;
+        d_out[gid] = accum;
+        for (int i=1; i < rows_in; i++) {
+            tmp    = d_in[gid + cols_in * i];
+            accum  = sqrt(accum) + tmp*tmp;
+            d_out[gid + cols_in * i] = accum;
+        }
     }
 }
 
@@ -178,14 +145,16 @@ mat_acc_kernel_second( const unsigned int rows_in_t, const unsigned int cols_in_
     //   the original result B
     
     const unsigned int gid = blockIdx.x * blockDim.x + threadIdx.x;
-    T accum =  d_in_t[gid*cols_in_t] * d_in_t[gid*cols_in_t];
-    T tmp;
-    d_out_t[gid*cols_in_t] = accum;
+    if (gid < cols_in_t) {
+        T accum =  d_in_t[gid*cols_in_t] * d_in_t[gid*cols_in_t];
+        T tmp;
+        d_out_t[gid*cols_in_t] = accum;
     
-    for (int i=1; i < rows_in_t; i++) {
-        tmp    = d_in_t[gid * cols_in_t + i];
-        accum  = sqrt(accum) + tmp*tmp;
-        d_out_t[gid * cols_in_t + i] = accum;
+        for (int i=1; i < rows_in_t; i++) {
+            tmp    = d_in_t[gid * cols_in_t + i];
+            accum  = sqrt(accum) + tmp*tmp;
+            d_out_t[gid * cols_in_t + i] = accum;
+        }
     }
 
 }
