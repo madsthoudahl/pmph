@@ -260,7 +260,7 @@ unsigned long int matmult_cpu(
                   const unsigned int  rows_in_b,
                   const unsigned int  cols_in_b,
                   T*                  h_in_b,
-                  T*                  h_out,
+                  T*                  h_out
 ) {
     if (cols_in_a != rows_in_b) {
         printf("matrix multiplication: input dimensions does not fit");

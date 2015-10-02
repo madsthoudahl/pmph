@@ -3,7 +3,8 @@
 
 #include "devkernels.cu.h"
 #define TRANSPOSE_OPTIMAL_VERSION 2
-#define MATRIX_ACCFUN_OPTIMAL_VERSION 1
+#define MATRIX_ACCFUN_OPTIMAL_VERSION 2
+#define MATRIX_MULTIPLICATION_OPTIMAL_VERSION 2
 
 /*******************************************************************************
  * DEVICE LIBRARY FUNCTIONS - UTILIZING KERNEL FUNCTIONS                       *
@@ -18,16 +19,9 @@ transpose( const unsigned int, const unsigned int, T*, T*, const unsigned char v
 template<class T> void 
 matrix_accfun(const unsigned int, const unsigned int, T*, T*, const unsigned char version=0, const unsigned int block_size=0 );
 
-/*******************************************************************************
- * YET TO BE IMPLEMENTED                                                       *
- ******************************************************************************/
-
-
 // MATRIX MULTIPLICATION        (ASS3 TASK3)                                  //
 template<class T> void 
-matmult(const unsigned int, const unsigned int, const unsigned int, T*, const unsigned int, const unsigned int, T*, T* );
-template<class T> void 
-matmult_opt(const unsigned int, const unsigned int, const unsigned int, T*, const unsigned int, const unsigned int, T*, T* );
+matmult(const unsigned int, const unsigned int, T*, const unsigned int, const unsigned int, T*, T*, version=0 );
 
 
 
@@ -281,7 +275,7 @@ void matrix_accfun(
  * d_out      output matrix array (device mem)                                 *
  *                                                                             */
 template<class T> 
-void matmult( const unsigned int  block_size,
+void matmult( 
               const unsigned int  rows_in_a,
               const unsigned int  cols_in_a,
               T*                  d_in_a,
@@ -289,7 +283,7 @@ void matmult( const unsigned int  block_size,
               const unsigned int  cols_in_b, 
               T*                  d_in_b, 
               T*                  d_out,
-              const unsigned char version,
+              const unsigned char version
 ) {
     // Implement a naïve CUDA version that straightforwardly implements the 
     // pseudo-code above. (Uses a two-dimensional kernel/grid corresponding 
@@ -300,11 +294,30 @@ void matmult( const unsigned int  block_size,
     const unsigned int block_size = BLOCK_SIZE;
 
     printf("matmult not implemented in devlib.cu.h\n"); // TODO
+    // if no version is chosen, use optimal version
+    const char ver = (version==0) ? (MATRIX_MULTIPLICATION_OPTIMAL_VERSION)  : version ; 
+    
+    // tile size argument is applied if available
+    unsigned int t_size = (tile_size==0) ? (TILE_SIZE) : tile_size ;
+    if (t_size > 32) {
+        printf("matrix transpose failing due to bad tile_size");
+        return;
+    } 
+
+    dim3 block_size;
+    dim3 grid_size;
+    
     if (ver==1) {
+
+        block_size.x = t_size ;
+        block_size.y = t_size ;
         
-        num_blocks = ( (d_size % block_size) == 0) ?
-                        d_size / block_size     :
-                        d_size / block_size + 1 ;
+	grid_size.x = ( (cols_in % t_size == 0) ? 
+                         cols_in / t_size : 
+                         cols_in / t_size + 1 );
+        grid_size.y = ( (rows_in % t_size == 0) ?
+                         rows_in / t_size :
+                         rows_in / t_size + 1 );
 
         matmult_naive_kernel<T><<< num_blocks, block_size >>>(rows_in, cols_in, d_in, d_out);
     
