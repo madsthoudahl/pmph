@@ -32,7 +32,7 @@ template<class T> unsigned long int matrix_accfun_gpu(const unsigned int, const 
 
 // MATRIX MULTIPLICATION (ASS3 TASK3)                                         //
 template<class T> unsigned long int matmult_cpu(const unsigned int, const unsigned int, T*, const unsigned int, const unsigned int, T*, T*);
-template<class T> unsigned long int matmult_gpu(const unsigned int, const unsigned int, T*, const unsigned int, const unsigned int, T*, T*, const unsigned char version=0);
+template<class T> unsigned long int matmult_gpu(const unsigned int, const unsigned int, T*, const unsigned int, const unsigned int, T*, T*, const unsigned char version=0, const unsigned char tile_size=0);
 
 // (SEGMENTED) SCAN INCLUSIVE (WRAPPER TO PROVIDED FUNCTION)                  //
 template<class OP, class T> void scanInc_gpu( const unsigned long, T*, T* );
@@ -297,12 +297,12 @@ unsigned long int matmult_gpu(
                   const unsigned int  cols_in_b,
                   T*                  h_in_b,
                   T*                  h_out,
-                  const unsigned char version
+                  const unsigned char version,
+                  const unsigned char tile_size
 ) {    
     const unsigned int d_size_a   = rows_in_a * cols_in_a;
     const unsigned int d_size_b   = rows_in_b * cols_in_b;
     const unsigned int d_size_out = rows_in_a * cols_in_b;
-    const unsigned int block_size = BLOCK_SIZE;
     
     // allocate device arrays
     T *d_in_a, *d_in_b, *d_out;
@@ -319,7 +319,7 @@ unsigned long int matmult_gpu(
     struct timeval t_start, t_end, t_diff;
     gettimeofday(&t_start, NULL);
  
-    matmult<T>(block_size, rows_in_a, cols_in_a, d_in_a, rows_in_b, cols_in_b, d_in_b, d_out, version);
+    matmult<T>(rows_in_a, cols_in_a, d_in_a, rows_in_b, cols_in_b, d_in_b, d_out, version, tile_size);
 
     gettimeofday(&t_end, NULL);
     timeval_subtract(&t_diff, &t_end, &t_start);

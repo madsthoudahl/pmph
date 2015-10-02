@@ -12,9 +12,9 @@
 #define M2 (6*64*1024)  // N in assignment
 #define N2 64 // M=64 in assignment
 // task three specific
-#define M3 8
-#define U3 5
-#define N3 10 
+#define M3 10   // 1024
+#define U3 (4)  // 4*8
+#define N3 10   // 1024
 
 
 
@@ -28,7 +28,7 @@ int warmup(const unsigned int size);
 
 int main(int argc, char** argv) {
     warmup(7624); // sole purpose is 'warming up GPU' so that timings get valid downstream.
-    task_one(false);
+    //task_one(false);
     //task_two(false);
     task_three(true);
     return 0;
@@ -219,7 +219,7 @@ void task_three(bool verbose){
     const unsigned int a_rows = M3;
     const unsigned int a_cols = U3;
     const unsigned int b_rows = U3;
-    const unsigned int b_cols = M3; //N3;
+    const unsigned int b_cols = N3;
     const char s_valid[10]   = "--  VALID";
     const char s_invalid[10] = "--INVALID";
     const unsigned int a_size   = a_rows * a_cols;
@@ -237,12 +237,19 @@ void task_three(bool verbose){
         for (int j=0; j<(a_cols); j++){
             m_in_a[i*a_cols+j] = 0;
             if (abs(i-j)<2) {
-                m_in_a[i*a_cols+j] = (i==j) ? 3.0 : -1.0 ;
+                m_in_a[i*a_cols+j] = (i==j) ? 3.5 : -1.0 ;
             }
         }
     }
 
-    transpose_gpu<float>( a_rows, a_cols, m_in_a, m_in_b );
+    for (int i=0; i<(b_rows); i++){
+        for (int j=0; j<(b_cols); j++){
+            m_in_b[i*b_cols+j] = 0;
+            if (abs(i-j)<2) {
+                m_in_b[i*b_cols+j] = (i==j) ? 2.5 : -1.0 ;
+            }
+        }
+    }
 
     // initiate timing variable, keep results for validation
     unsigned long int elapsed_a, elapsed_c, elapsed_d;
@@ -296,8 +303,8 @@ void task_three(bool verbose){
 
     if (verbose) {
         printf("Matrix multiplication on following array: \n");
-        //matprint( a_rows, a_cols, m_in_a );
-        //matprint( b_rows, b_cols, m_in_b );
+        matprint( a_rows, a_cols, m_in_a );
+        matprint( b_rows, b_cols, m_in_b );
         printf("Matrix multiplication by cpu (naïve): \n");
         matprint( a_rows, b_cols, m_out_a);
         printf("Matrix multiplication by gpu (naïve): \n");
@@ -312,6 +319,9 @@ void task_three(bool verbose){
     free(m_out_c);
     free(m_out_d);
 }
+
+
+
 
 
 int warmup(const unsigned int size){

@@ -183,13 +183,59 @@ mat_acc_second_kernel( const unsigned int rows_in, const unsigned int cols_in, T
 
 // ASS3 TASK3 -  MATRIX MULTIPLICATION                                        //
 
+template<class T> __global__ void
+matmult_naive_kernel( const unsigned int M,  // outer y limit
+                      const unsigned int U,  // k from 0 to u, match dim
+                      const unsigned int N,  // outer x limit
+                      T*                 A,  // input  MxU
+                      T*                 B,  // input  UxN
+                      T*                 res // output MxN
+) {
+    const unsigned int j = blockIdx.x * blockDim.x + threadIdx.x;
+    const unsigned int i = blockIdx.y * blockDim.y + threadIdx.y;
+    if ((j < N) & (i < M)) {
+        const unsigned int tile = blockDim.x;
+        float tmp = 0.0;
+        for (int kk=0 ; kk<U ; kk+=tile) {
+            for (int k=kk ; k<U ; k+=1) {
+                tmp += A[i*U+k] * B[k*N+j];
+            }
+        res[j + N * i] = tmp;
+        }
+    }
+}
 
 
-
-
-
-
-
+// tiled version of matrix multiplication does not work... :-(
+template<class T> __global__ void
+matmult_tile_kernel( const unsigned int M,  // outer y limit
+                     const unsigned int U,  // k from 0 to u, match dim
+                     const unsigned int N,  // outer x limit
+                     T*                 A,  // input  MxU
+                     T*                 B,  // input  UxN
+                     T*                 res // output MxN
+) {
+    __shared__ T Ash[TILE_SIZE][TILE_SIZE+1], Bsh[TILE_SIZE][TILE_SIZE+1];
+    const unsigned int j = blockIdx.x * blockDim.x + threadIdx.x;
+    const unsigned int i = blockIdx.y * blockDim.y + threadIdx.y;
+    const unsigned int x = threadIdx.x;
+    const unsigned int y = threadIdx.y;
+    const unsigned int tile = blockDim.x;
+    float tmp = 0.0;
+    for (int kk=0 ; kk<U ; kk+=tile) {
+        Ash[y][x] = (kk+x)<U ? A[i+(kk+x)*U] : 0.0 ;
+        Bsh[y][x] = (kk+y)<U ? B[(kk+x)+j*N] : 0.0 ;
+        __syncthreads();
+        for (int k=kk ; k<U ; k+=1) {
+            tmp += Ash[y][k] * Bsh[k][x];
+        }
+        __syncthreads();
+    if ((j < N) & (i < M)) {
+        res[j + N * i] = tmp;
+    }
+    }
+}
+    
 
 
 

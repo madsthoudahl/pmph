@@ -13,7 +13,7 @@
 
 // MATRIX TRANSPOSITION         (ASS3 TASK1)                                  //
 template<class T> void 
-transpose( const unsigned int, const unsigned int, T*, T*, const unsigned char version=0, const unsigned char tile_size=TILE_SIZE);
+transpose( const unsigned int, const unsigned int, T*, T*, const unsigned char version=0, const unsigned char tile_size=0);
 
 // MATRIX ACCUMULATION FUNCTION (ASS3 TASK2)                                  //
 template<class T> void 
@@ -21,7 +21,7 @@ matrix_accfun(const unsigned int, const unsigned int, T*, T*, const unsigned cha
 
 // MATRIX MULTIPLICATION        (ASS3 TASK3)                                  //
 template<class T> void 
-matmult(const unsigned int, const unsigned int, T*, const unsigned int, const unsigned int, T*, T*, version=0 );
+matmult(const unsigned int, const unsigned int, T*, const unsigned int, const unsigned int, T*, T*,const unsigned char version=0, const unsigned char tile_size=0 );
 
 
 
@@ -283,17 +283,13 @@ void matmult(
               const unsigned int  cols_in_b, 
               T*                  d_in_b, 
               T*                  d_out,
-              const unsigned char version
+              const unsigned char version,
+              const unsigned char tile_size
 ) {
     // Implement a naïve CUDA version that straightforwardly implements the 
     // pseudo-code above. (Uses a two-dimensional kernel/grid corresponding 
     // to the two parallel outer loops.)
 
-    const unsigned int d_size = 1; // TODO
-
-    const unsigned int block_size = BLOCK_SIZE;
-
-    printf("matmult not implemented in devlib.cu.h\n"); // TODO
     // if no version is chosen, use optimal version
     const char ver = (version==0) ? (MATRIX_MULTIPLICATION_OPTIMAL_VERSION)  : version ; 
     
@@ -312,27 +308,32 @@ void matmult(
         block_size.x = t_size ;
         block_size.y = t_size ;
         
-	grid_size.x = ( (cols_in % t_size == 0) ? 
-                         cols_in / t_size : 
-                         cols_in / t_size + 1 );
-        grid_size.y = ( (rows_in % t_size == 0) ?
-                         rows_in / t_size :
-                         rows_in / t_size + 1 );
+        grid_size.x = ( (cols_in_b % t_size == 0) ?
+                         cols_in_b / t_size :
+                         cols_in_b / t_size + 1 );
+	grid_size.y = ( (rows_in_a % t_size == 0) ? 
+                         rows_in_a / t_size : 
+                         rows_in_a / t_size + 1 );
 
-        matmult_naive_kernel<T><<< num_blocks, block_size >>>(rows_in, cols_in, d_in, d_out);
+        matmult_naive_kernel<T><<< grid_size, block_size >>>(rows_in_a, cols_in_a, cols_in_b, d_in_a, d_in_b, d_out);
     
         cudaThreadSynchronize();
 
     } else if (ver==2) {
         
-        num_blocks = ( (d_size % block_size) == 0) ?
-                        d_size / block_size     :
-                        d_size / block_size + 1 ;
+        block_size.x = t_size ;
+        block_size.y = t_size ;
+        
+        grid_size.x = ( (cols_in_b % t_size == 0) ?
+                         cols_in_b / t_size :
+                         cols_in_b / t_size + 1 );
+	grid_size.y = ( (rows_in_a % t_size == 0) ? 
+                         rows_in_a / t_size : 
+                         rows_in_a / t_size + 1 );
 
-        matmult_tile_kernel<T><<< num_blocks, block_size >>>(rows_in, cols_in, d_in, d_out);
+        matmult_tile_kernel<T><<< grid_size, block_size >>>(rows_in_a, cols_in_a, cols_in_b, d_in_a, d_in_b, d_out);
     
         cudaThreadSynchronize();
-
     } else {
     
         printf("devlib.cu.h: matmult: unknown function version, aborting");
