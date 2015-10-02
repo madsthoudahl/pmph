@@ -192,47 +192,64 @@ void matrix_accfun(
                     const unsigned int  block_size
 ) {
     
+    //printf("entering matrix accfun in devlib.cu.h\n");
     // if no version is chosen, use optimal version
+    unsigned int num_blocks;
+    unsigned int d_size = rows_in * cols_in;
     const char ver = (version==0) ? (MATRIX_ACCFUN_OPTIMAL_VERSION)  : version ; 
     
-    // tile size argument is applied if available
-   
+    // blocksize argument is applied if available   
     const unsigned int blck_size = (block_size==0) ? (BLOCK_SIZE) : block_size;
     if (blck_size>1024) {
-        printf("devlib.cu.h: matrix_accfun: block size > 1024. aborting");
+        printf("devlib.cu.h: matrix_accfun: block size > 1024. aborting\n");
         return;
     }
 
-    int num_blocks=1; // TODO
+
     
     if (ver==1) {
         
-        mat_acc_kernel_first<T><<< num_blocks, block_size >>>(rows_in, cols_in, d_in, d_out);
+        num_blocks = ( (d_size % blck_size) == 0) ?
+                        d_size / blck_size     :
+                        d_size / blck_size + 1 ;
+
+        mat_acc_first_kernel<T><<< num_blocks, blck_size >>>(rows_in, cols_in, d_in, d_out);
     
+        cudaThreadSynchronize();
+
+
+
     } else if (ver==2) {
 
+        num_blocks = ( (d_size % blck_size) == 0) ?
+                        d_size / blck_size     :
+                        d_size / blck_size + 1 ;
+
         T* d_in_t, *d_out_t;
-        cudaMalloc((void**) &d_in_t, rows_in*cols_in*sizeof(T) );
-        cudaMalloc((void**) &d_out_t, rows_in*cols_in*sizeof(T) );
+        cudaMalloc((void**) &d_in_t,  d_size*sizeof(T) );
+        cudaMalloc((void**) &d_out_t, d_size*sizeof(T) );
 
         transpose<T>( rows_in, cols_in, d_in, d_in_t );
 
-        printf("after 1st transpose"); // TODO
-        //mat_acc_kernel_second<T><<< num_blocks, block_size >>>(rows_in, cols_in, d_in_t, d_out_t);
-        printf("matrix_accfun_gpu_second not implemented in devlib.cu.h\n"); // TODO
-        
-	//transpose<T>( cols_in, rows_in, d_out_t, d_out );
-        printf("after 2nd transpose"); // TODO
+        mat_acc_second_kernel<T><<< num_blocks, blck_size >>>( cols_in, rows_in, d_in_t, d_out_t);
+
+	transpose<T>( cols_in, rows_in, d_out_t, d_out );
+        cudaThreadSynchronize();
     
         cudaFree(d_in_t);
         cudaFree(d_out_t);
+
+
+
 
     } else {
     
         printf("devlib.cu.h: matrix_accfun: unknown function version, aborting");
     
     }
+
     
+    //printf("exiting matrix accfun in devlib.cu.h\n");
     return;
 }
 
@@ -264,41 +281,59 @@ void matrix_accfun(
  * d_out      output matrix array (device mem)                                 *
  *                                                                             */
 template<class T> 
-void matmult( const unsigned int block_size,
-              const unsigned int rows_in_a,
-              const unsigned int cols_in_a,
-              T*                 d_in_a,
-              const unsigned int rows_in_b,
-              const unsigned int cols_in_b, 
-              T*                 d_in_b, 
-              T*                 d_out
+void matmult( const unsigned int  block_size,
+              const unsigned int  rows_in_a,
+              const unsigned int  cols_in_a,
+              T*                  d_in_a,
+              const unsigned int  rows_in_b,
+              const unsigned int  cols_in_b, 
+              T*                  d_in_b, 
+              T*                  d_out,
+              const unsigned char version,
 ) {
     // Implement a naïve CUDA version that straightforwardly implements the 
     // pseudo-code above. (Uses a two-dimensional kernel/grid corresponding 
     // to the two parallel outer loops.)
 
-    printf("matmult_naive not implemented in devlib.cu.h\n"); // TODO
+    const unsigned int d_size = 1; // TODO
+
+    const unsigned int block_size = BLOCK_SIZE;
+
+    printf("matmult not implemented in devlib.cu.h\n"); // TODO
+    if (ver==1) {
+        
+        num_blocks = ( (d_size % block_size) == 0) ?
+                        d_size / block_size     :
+                        d_size / block_size + 1 ;
+
+        matmult_naive_kernel<T><<< num_blocks, block_size >>>(rows_in, cols_in, d_in, d_out);
+    
+        cudaThreadSynchronize();
+
+    } else if (ver==2) {
+        
+        num_blocks = ( (d_size % block_size) == 0) ?
+                        d_size / block_size     :
+                        d_size / block_size + 1 ;
+
+        matmult_tile_kernel<T><<< num_blocks, block_size >>>(rows_in, cols_in, d_in, d_out);
+    
+        cudaThreadSynchronize();
+
+    } else {
+    
+        printf("devlib.cu.h: matmult: unknown function version, aborting");
+    
+    }
     return;
 }
 
-template<class T> 
-void matmult_opt( const unsigned int block_size,
-                  const unsigned int rows_in_a,
-                  const unsigned int cols_in_a,
-                  T*                 d_in_a,
-                  const unsigned int rows_in_b,
-                  const unsigned int cols_in_b, 
-                  T*                 d_in_b, 
-                  T*                 d_out
-) {
-    // Implement a CUDA optimized version that uses tiling in shared memory in
-    // order to reduce the number of global-memory accesses by a factor of 
-    // TILE-size – see lecture notes. (Uses a two-dimensional kernel/grid 
-    // corresponding to the two parallel outer loops.)
 
-    printf("matmult_opt not implemented in devlib.cu.h\n"); // TODO
-    return;
-}
+
+
+
+
+
 
 
 

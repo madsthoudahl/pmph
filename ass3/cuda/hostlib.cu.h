@@ -32,7 +32,7 @@ template<class T> unsigned long int matrix_accfun_gpu(const unsigned int, const 
 
 // MATRIX MULTIPLICATION (ASS3 TASK3)                                         //
 template<class T> unsigned long int matmult_cpu(const unsigned int, const unsigned int, T*, const unsigned int, const unsigned int, T*, T*);
-template<class T> unsigned long int matmult_gpu(const unsigned int, const unsigned int, T*, const unsigned int, const unsigned int, T*, T*);
+template<class T> unsigned long int matmult_gpu(const unsigned int, const unsigned int, T*, const unsigned int, const unsigned int, T*, T*, const unsigned char version=0);
 
 // (SEGMENTED) SCAN INCLUSIVE (WRAPPER TO PROVIDED FUNCTION)                  //
 template<class OP, class T> void scanInc_gpu( const unsigned long, T*, T* );
@@ -171,13 +171,13 @@ unsigned long int matrix_accfun_cpu( int rows_in,
     gettimeofday(&t_start, NULL);
 
     T accum, tmp;
-    for (int x=0 ; x<cols_in ; x++) {
-        accum =  h_in[x] * h_in[x];
-	h_out[x] = accum;
-	for (int y=1 ; y<rows_in ; y++ ) {
-	    tmp   = h_in[x + y * cols_in];
+    for (int i=0 ; i<rows_in ; i++) {
+        accum =  h_in[i*cols_in] * h_in[i*cols_in];
+	h_out[i*cols_in] = accum;
+	for (int j=1 ; j<cols_in ; j++ ) {
+	    tmp   = h_in[i * cols_in + j ];
 	    accum = sqrt(accum) + tmp * tmp;
-	    h_out[x + y * cols_in] = accum;
+	    h_out[i * cols_in + j ] = accum;
 	}
     }
 
@@ -190,11 +190,11 @@ unsigned long int matrix_accfun_cpu( int rows_in,
 
 template<class T> 
 unsigned long int matrix_accfun_gpu( const unsigned int   rows_in, 
-                        const unsigned int   cols_in, 
-                        T*                   h_in, 
-                        T*                   h_out, 
-                        const unsigned char  version,
-                        const unsigned int   block_size
+                                     const unsigned int   cols_in, 
+                                     T*                   h_in, 
+                                     T*                   h_out, 
+                                     const unsigned char  version,
+                                     const unsigned int   block_size
 ) {    
     const unsigned int d_size = rows_in * cols_in;
     
@@ -211,9 +211,7 @@ unsigned long int matrix_accfun_gpu( const unsigned int   rows_in,
     struct timeval t_start, t_end, t_diff;
     gettimeofday(&t_start, NULL);
 
-    printf("entering devlib");
     matrix_accfun<T>(rows_in, cols_in, d_in, d_out, version, block_size);
-    printf("exiting devlib");
 
     gettimeofday(&t_end, NULL);
     timeval_subtract(&t_diff, &t_end, &t_start);
@@ -223,8 +221,8 @@ unsigned long int matrix_accfun_gpu( const unsigned int   rows_in,
     cudaMemcpy( h_out, d_out, d_size*sizeof(T), cudaMemcpyDeviceToHost);
 
     // unallocate device arrays
-    cudaFree(d_in);
     cudaFree(d_out);
+    cudaFree(d_in);
 
     return elapsed;
 }
@@ -250,18 +248,19 @@ unsigned long int matrix_accfun_gpu( const unsigned int   rows_in,
  *                                                                             *
  * h_out      output matrix array (host mem)              MxN                  *
  *                                                                             *
- * (opt)      boolean value to describe wether optimal implementation          *
- *            is requested... if on gpu,  standard is 'true'                   *
+ * (version)  unsigned char value to describe which implementation             *
+ *            is requested... if on gpu,  standard is 'optimal'                *
  *                                                                             *
  */
 template<class T> 
-unsigned long int matmult_cpu( const unsigned int rows_in_a, 
-                  const unsigned int cols_in_a,
-                  T*                 h_in_a, 
-                  const unsigned int rows_in_b,
-                  const unsigned int cols_in_b,
-                  T*                 h_in_b,
-                  T*                 h_out
+unsigned long int matmult_cpu(
+                  const unsigned int  rows_in_a, 
+                  const unsigned int  cols_in_a,
+                  T*                  h_in_a, 
+                  const unsigned int  rows_in_b,
+                  const unsigned int  cols_in_b,
+                  T*                  h_in_b,
+                  T*                  h_out,
 ) {
     if (cols_in_a != rows_in_b) {
         printf("matrix multiplication: input dimensions does not fit");
@@ -270,19 +269,18 @@ unsigned long int matmult_cpu( const unsigned int rows_in_a,
     unsigned long int elapsed;
     struct timeval t_start, t_end, t_diff;
     gettimeofday(&t_start, NULL);
-    //int m = rows_in_a;
-    //int u = rows_in_b; // = cols_in_a
-    //int n = cols_in_b;
+    
     float tmp;
     for (int i=0 ; i<rows_in_a ; i++ ) {
-        tmp = 0;
         for (int j=0 ; j<cols_in_b ; j++) {
+            tmp = 0;
 	    for (int k=0 ; k<cols_in_a ; k++) {
-	        tmp += h_in_a[i*rows_in_a+k] * h_in_b[k*rows_in_b+j];
+	        tmp += h_in_a[i*cols_in_a+k] * h_in_b[k*cols_in_b+j];
 	    }
-            h_out[i*rows_in_a + j] = tmp;
+            h_out[i*cols_in_b + j] = tmp;
 	}
     }
+
     gettimeofday(&t_end, NULL);
     timeval_subtract(&t_diff, &t_end, &t_start);
     elapsed = (t_diff.tv_sec*1e6+t_diff.tv_usec);
@@ -291,14 +289,15 @@ unsigned long int matmult_cpu( const unsigned int rows_in_a,
 }
 
 template<class T> 
-unsigned long int matmult_gpu( const unsigned int rows_in_a, 
-                  const unsigned int cols_in_a,
-                  T*                 h_in_a, 
-                  const unsigned int rows_in_b,
-                  const unsigned int cols_in_b,
-                  T*                 h_in_b,
-                  T*                 h_out,
-                  bool               opt
+unsigned long int matmult_gpu( 
+                  const unsigned int  rows_in_a, 
+                  const unsigned int  cols_in_a,
+                  T*                  h_in_a, 
+                  const unsigned int  rows_in_b,
+                  const unsigned int  cols_in_b,
+                  T*                  h_in_b,
+                  T*                  h_out,
+                  const unsigned char version
 ) {    
     const unsigned int d_size_a   = rows_in_a * cols_in_a;
     const unsigned int d_size_b   = rows_in_b * cols_in_b;
@@ -319,11 +318,12 @@ unsigned long int matmult_gpu( const unsigned int rows_in_a,
     unsigned long int elapsed;
     struct timeval t_start, t_end, t_diff;
     gettimeofday(&t_start, NULL);
-    if (opt) {
-        matmult_opt<T>(block_size, rows_in_a, cols_in_a, d_in_a, rows_in_b, cols_in_b, d_in_b, d_out);
-    } else {
-        matmult<T>(block_size, rows_in_a, cols_in_a, d_in_a, rows_in_b, cols_in_b, d_in_b, d_out);
-    }
+ 
+    matmult<T>(block_size, rows_in_a, cols_in_a, d_in_a, rows_in_b, cols_in_b, d_in_b, d_out, version);
+
+    gettimeofday(&t_end, NULL);
+    timeval_subtract(&t_diff, &t_end, &t_start);
+    elapsed = (t_diff.tv_sec*1e6+t_diff.tv_usec);
 
     // copy result back from device
     cudaMemcpy( h_out, d_out, d_size_out*sizeof(T), cudaMemcpyDeviceToHost);
@@ -332,10 +332,6 @@ unsigned long int matmult_gpu( const unsigned int rows_in_a,
     cudaFree(d_in_a);
     cudaFree(d_in_b);
     cudaFree(d_out);
-    
-    gettimeofday(&t_end, NULL);
-    timeval_subtract(&t_diff, &t_end, &t_start);
-    elapsed = (t_diff.tv_sec*1e6+t_diff.tv_usec);
 
     return elapsed;
 }
