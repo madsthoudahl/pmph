@@ -47,6 +47,7 @@ void spMatVecMult_gpu( const unsigned int, int*, int*, float*, float*, const uns
 // HELPER FUNCTIONS TO TIME AND VALIDATE (COULD BE MOVED OUT OF THIS LIBRARY) //
 int timeval_subtract(struct timeval *result, struct timeval *t2, struct timeval *t1);
 template<class T> bool validate(const unsigned int, T*, T*, bool=false);
+template<class T> bool mvalidate(const unsigned int, const unsigned int, T*, T*, bool=false);
 template<class T> T sum(const unsigned int, T* );
 void matprint(const unsigned int, const unsigned int, int* );
 void matprint(const unsigned int, const unsigned int, float* );
@@ -540,13 +541,41 @@ bool validate(const unsigned int size, T* arr_a, T* arr_b, bool verbose){
         if ( diff > EPSILON ) {
             success = false;
             if (verbose) {
-                printf("@%d: %f - %f = %f\n",i, arr_a[i], arr_b[i], diff);
+                printf("A[%d]:%f  B[%d]:%f \n",i, arr_a[i], i, arr_b[i]);
             }
         }
     }
     return success;
 }
 
+template<class T> bool 
+mvalidate(const unsigned int cols, const unsigned int rows, T* a, T* b, bool verbose){
+    bool success = true;
+    T diff;
+    int e=0, strlen=50;
+    char *errs;
+    errs = (char*) malloc(cols*rows*strlen*sizeof(char));
+    for (int i=0; i <cols*rows; i++) {
+        diff = abs(a[i] - b[i]);
+        if ( diff > EPSILON ) {
+            success = false;
+            if (verbose) {
+                int x = i % cols;
+                int y = i / cols;
+                sprintf( &errs[e++*strlen], "A[%3d,%3d]:%8.3f  B[%3d,%3d]:%8.3f\n",x,y, a[i], x,y, b[i]);
+            }
+        }
+    }
+    if (verbose && e>0){
+        printf("Matrix validation failed: log:\n");
+        for (int i=0; i<e ; i++){
+            printf("%s", &errs[i*strlen]);
+        }
+        free(errs);
+        printf("Matrix validate log end\n");
+    }
+    return success;
+}
 
 /** ARRAY SUMMATION                                               *
  * calculates the sum of the following *size* numbers in array    *

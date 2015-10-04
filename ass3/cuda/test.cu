@@ -5,32 +5,22 @@
 #include <math.h>
 #include "hostlib.cu.h"
 
-// task one specific
-#define M1 (1*1024)
-#define N1 (1*1024)
-// task two specific
-#define M2 (6*64*1024)  // N in assignment
-#define N2 64 // M=64 in assignment
-// task three specific
-#define M3 10   // 1024
-#define U3 (4)  // 4*8
-#define N3 10   // 1024
-
 
 
 
 // declared with purpose of starting the file with its main function
-void task_one(bool);
-void task_two(bool);
-void task_three(bool);
+void task_one(int M, int N, bool verbose);
+void task_two(int M, int N, bool verbose);
+void task_three(int M, int U, int N, bool verbose);
 int warmup(const unsigned int size);
 
 
+// main test program
 int main(int argc, char** argv) {
-    warmup(7624); // sole purpose is 'warming up GPU' so that timings get valid downstream.
-    //task_one(false);
-    //task_two(false);
-    task_three(true);
+    warmup(8*1024); // sole purpose is 'warming up GPU' so that timings get valid downstream.
+    task_one(   (8*1024)   , (8*1024), false);
+    task_two(   (6*64*1024), (64)    , false);
+    task_three( (5*256)    , (5*256) , (5*256), false);
     return 0;
 }
 
@@ -39,7 +29,7 @@ int main(int argc, char** argv) {
 
 
 
-void task_one(bool verbose){
+void task_one(int M, int N, bool verbose){
     printf("\n\nASSIGNMENT3 TASK1: MATRIX TRANSPOSITION\n");
     // Transpose Matrix 
     // 1a. implement serial version
@@ -48,8 +38,8 @@ void task_one(bool verbose){
     // 1d. implement serial version
 
     // initiate data to transpose (dense matrix)
-    const unsigned int rows = M1;
-    const unsigned int cols = N1;
+    const unsigned int rows = M;
+    const unsigned int cols = N;
     const char s_valid[10]   = "--  VALID";
     const char s_invalid[10] = "--INVALID";
     const unsigned int arr_size = rows * cols;
@@ -79,19 +69,20 @@ void task_one(bool verbose){
     { 
         const unsigned char naive_version = 1;
         elapsed_c = transpose_gpu<float>( rows, cols, m_in, m_out_c, naive_version);
-	valid_c   = validate<float>(arr_size, m_out_a, m_out_c);
+	valid_c   = mvalidate<float>(rows, cols, m_out_a, m_out_c);
     }
 
     // TASK 1 D)
     { 
         const unsigned char opt_version = 2;
         elapsed_d = transpose_gpu<float>( rows, cols, m_in, m_out_d, opt_version);
-	valid_d   = validate<float>(arr_size, m_out_a, m_out_d);
+	valid_d   = mvalidate<float>( rows, cols, m_out_a, m_out_d);
     }
 
     // print statistics
-    const double gpu_speedup = ((double) elapsed_c) / ((double) elapsed_d + 1);
-    const double cpu_speedup = ((double) elapsed_a) / ((double) elapsed_d + 1);
+    const double gpu_speedup  = ((double) elapsed_c) / ((double) elapsed_d + 1);
+    const double cpu_speedup1 = ((double) elapsed_a) / ((double) elapsed_c + 1);
+    const double cpu_speedup2 = ((double) elapsed_a) / ((double) elapsed_d + 1);
     const unsigned int mops = 2 * rows * cols;
     float gmops_a = (float) mops / ( elapsed_a * 1000);
     float gmops_c = (float) mops / ( elapsed_c * 1000);
@@ -108,7 +99,8 @@ void task_one(bool verbose){
     printf("GPU optimized: %10.3f Gmop/s.\n", gmops_d);
 
     printf("\nThis is a speedup of %7.2f, for tile and coalesced mem accesses on GPU.\n",gpu_speedup);
-    printf("... and a speedup of %7.2f, for GPU opt compared to CPU.\n",cpu_speedup);
+    printf("... and a speedup of %7.2f, for GPU naive compared to CPU.\n",cpu_speedup1);
+    printf("... and a speedup of %7.2f, for GPU opt   compared to CPU.\n",cpu_speedup2);
 
     if (verbose) { // also print output matrices
         printf("\nInput matrix before transposition: \n");
@@ -117,8 +109,10 @@ void task_one(bool verbose){
         matprint(cols, rows, m_out_a);
         printf("Matrix after transposition by gpu (naive): \n");
         matprint(cols, rows, m_out_c);
+	mvalidate(rows, cols, m_out_a, m_out_c, verbose);
         printf("Matrix after transposition by gpu (opt): \n");
         matprint(cols, rows, m_out_d);
+	mvalidate(rows, cols, m_out_a, m_out_d, verbose);
     }
 
     // unallocate memory again
@@ -133,12 +127,12 @@ void task_one(bool verbose){
 
 
 
-void task_two(bool verbose){
+void task_two(int M, int N, bool verbose){
     printf("\n\nASSIGNMENT3 TASK2: MATRIX TRANSPOSITION AS PREPROCESSING\n");
     // Matrix Transposition during or as a pre-computatiion
 
-    const int rows = M2;
-    const int cols = N2;
+    const int rows = M;
+    const int cols = N;
     const char s_valid[10]   = "--  VALID";
     const char s_invalid[10] = "--INVALID";
     const int arr_size = rows * cols;
@@ -166,14 +160,14 @@ void task_two(bool verbose){
     { 
 	const unsigned char version = 1;
         elapsed_c = matrix_accfun_gpu<float>(rows, cols, m_in, m_out_c, version); 
-	valid_c   = validate<float>(arr_size, m_out_a, m_out_c);
+	valid_c   = mvalidate<float>(rows, cols, m_out_a, m_out_c);
     }
 
     // TASK 2 D)
     { 
 	const unsigned char version = 2;
         elapsed_d = matrix_accfun_gpu<float>(rows, cols, m_in, m_out_d, version);  
-	valid_d   = validate<float>(arr_size, m_out_a, m_out_d);
+	valid_d   = mvalidate<float>(rows, cols, m_out_a, m_out_d);
     }
 
     // The modified program (CUDA transpositions included) has about two 
@@ -183,7 +177,8 @@ void task_two(bool verbose){
     
     // print statistics
     const double gpu_speedup = ((double) elapsed_c) / ((double) elapsed_d + 1);
-    const double cpu_speedup = ((double) elapsed_a) / ((double) elapsed_d + 1);
+    const double cpu_speedup1 = ((double) elapsed_a) / ((double) elapsed_c + 1);
+    const double cpu_speedup2 = ((double) elapsed_a) / ((double) elapsed_d + 1);
 
     printf("\nMatrix accfun on size %d x %d. Running times:\n", rows, cols);
     printf("CPU:           %10lu microsecs. \n", elapsed_a);
@@ -191,7 +186,8 @@ void task_two(bool verbose){
     printf("GPU second:    %10lu microsecs. %s\n", elapsed_d, (valid_d ? s_valid: s_invalid));
 
     printf("\nThis is a speedup of %7.2f, for second compared to first on GPU.\n",gpu_speedup);
-    printf("... and a speedup of %7.2f, for GPU second compared to CPU.\n",cpu_speedup);
+    printf("... and a speedup of %7.2f, for GPU first  compared to CPU.\n",cpu_speedup1);
+    printf("... and a speedup of %7.2f, for GPU second compared to CPU.\n",cpu_speedup2);
     
     if (verbose) {
         printf("Matrix accumulation function on following array: \n");
@@ -200,8 +196,10 @@ void task_two(bool verbose){
         matprint( rows, cols, m_out_a);
         printf("Matrix accumulation function by gpu (first version): \n");
         matprint( rows, cols, m_out_c);
+	mvalidate(rows, cols, m_out_a, m_out_c, verbose);
         printf("Matrix accumulation function by gpu (second version): \n");
         matprint( rows, cols, m_out_d);
+	mvalidate(rows, cols, m_out_a, m_out_d, verbose);
     }
 
     free(m_in);
@@ -213,13 +211,13 @@ void task_two(bool verbose){
 
 
 
-void task_three(bool verbose){
+void task_three(int M, int U, int N, bool verbose){
     printf("\n\nASSIGNMENT3 TASK3: MATRIX MULTIPLICATION\n");
 
-    const unsigned int a_rows = M3;
-    const unsigned int a_cols = U3;
-    const unsigned int b_rows = U3;
-    const unsigned int b_cols = N3;
+    const unsigned int a_rows = M;
+    const unsigned int a_cols = U;
+    const unsigned int b_rows = U;
+    const unsigned int b_cols = N;
     const char s_valid[10]   = "--  VALID";
     const char s_invalid[10] = "--INVALID";
     const unsigned int a_size   = a_rows * a_cols;
@@ -266,14 +264,14 @@ void task_three(bool verbose){
     { 
 	const unsigned char version = 1;
         elapsed_c = matmult_gpu<float>(a_rows, a_cols, m_in_a, b_rows, b_cols, m_in_b, m_out_c, version);
-	valid_c   = validate(res_size, m_out_a, m_out_c);
+	valid_c   = mvalidate( a_rows, b_cols, m_out_a, m_out_c);
     }
 
     // TASK 3 D)
     { 
 	const unsigned char version = 2;
         elapsed_d = matmult_gpu(a_rows, a_cols, m_in_a, b_rows, b_cols, m_in_b, m_out_d, version);
-	valid_d   = validate(res_size, m_out_a, m_out_d);
+	valid_d   = mvalidate(a_rows, b_cols, m_out_a, m_out_d);
     }
 
     // Measure and compare the various running times. 
@@ -285,8 +283,8 @@ void task_three(bool verbose){
 
     // print statistics
     const double gpu_speedup = ((double) elapsed_c) / ((double) elapsed_d + 1);
-    const double cpu_speedup = ((double) elapsed_a) / ((double) elapsed_d + 1);
-
+    const double cpu_speedup1 = ((double) elapsed_a) / ((double) elapsed_c + 1);
+    const double cpu_speedup2 = ((double) elapsed_a) / ((double) elapsed_d + 1);
     printf("\nMatrix Multiplication on (%dx%d) x (%d,%d). Timings:\n",a_rows, a_cols, b_rows, b_cols);
     printf("CPU:           %10lu microsecs. \n", elapsed_a);
     printf("GPU naïve:     %10lu microsecs. %s\n", elapsed_c, (valid_c ? s_valid: s_invalid));
@@ -298,7 +296,8 @@ void task_three(bool verbose){
     printf("GPU optimized: %10.3f Gflop/s.\n", gflops_d);
 
     printf("\nThis is a speedup of %7.2f, for second compared to first on GPU.\n",gpu_speedup);
-    printf("... and a speedup of %7.2f, for GPU second compared to CPU.\n\n",cpu_speedup);
+    printf("... and a speedup of %7.2f, for GPU naive compared to CPU.\n",cpu_speedup1);
+    printf("... and a speedup of %7.2f, for GPU opt   compared to CPU.\n",cpu_speedup2);
     
 
     if (verbose) {
@@ -309,8 +308,10 @@ void task_three(bool verbose){
         matprint( a_rows, b_cols, m_out_a);
         printf("Matrix multiplication by gpu (naïve): \n");
         matprint( a_rows, b_cols, m_out_c);
+	mvalidate(a_rows, b_cols, m_out_a, m_out_c, verbose);
         printf("Matrix multiplication by gpu (optimized): \n");
         matprint( a_rows, b_cols, m_out_d);
+	mvalidate(a_rows, b_cols, m_out_a, m_out_d, verbose);
     }
 
     free(m_in_a);

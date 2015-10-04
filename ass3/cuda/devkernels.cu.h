@@ -3,7 +3,7 @@
 
 #include <cuda_runtime.h>
 
-#define TILE_SIZE 32      // MUST BE DIVISIBLE BY 8
+#define TILE_SIZE   32    // SMALLER THAN 33
 #define BLOCK_SIZE 512    // SMALLER THAN 1025, AND DIVISIBLE BY 32
 
 /*******************************************************************************
@@ -182,9 +182,9 @@ mat_acc_second_kernel( const unsigned int rows_in, const unsigned int cols_in, T
 
 
 // ASS3 TASK3 -  MATRIX MULTIPLICATION                                        //
-
+// Works as a charm
 template<class T> __global__ void
-matmult_naive_kernel( const unsigned int M,  // outer y limit
+matmult_naive_1_kernel( const unsigned int M,  // outer y limit
                       const unsigned int U,  // k from 0 to u, match dim
                       const unsigned int N,  // outer x limit
                       T*                 A,  // input  MxU
@@ -193,11 +193,33 @@ matmult_naive_kernel( const unsigned int M,  // outer y limit
 ) {
     const unsigned int j = blockIdx.x * blockDim.x + threadIdx.x;
     const unsigned int i = blockIdx.y * blockDim.y + threadIdx.y;
+    const unsigned int tile = blockDim.x;
     if ((j < N) & (i < M)) {
-        const unsigned int tile = blockDim.x;
+        float tmp = 0.0;
+            for (int k=0 ; k<U ; k++) { 
+                tmp += A[i*U+k] * B[k*N+j];
+            }
+        res[j + N * i] = tmp;
+    }
+}
+
+// Simple loop unroll - still working
+template<class T> __global__ void
+matmult_naive_kernel( 
+              const unsigned int M,  // outer y limit
+              const unsigned int U,  // k from 0 to u, match dim
+              const unsigned int N,  // outer x limit
+              T*                 A,  // input  MxU
+              T*                 B,  // input  UxN
+              T*                 res // output MxN
+) {
+    const unsigned int j = blockIdx.x * blockDim.x + threadIdx.x;
+    const unsigned int i = blockIdx.y * blockDim.y + threadIdx.y;
+    const unsigned int tile = blockDim.x;
+    if ((j < N) & (i < M)) {
         float tmp = 0.0;
         for (int kk=0 ; kk<U ; kk+=tile) {
-            for (int k=kk ; k<U ; k+=1) {
+            for (int k=kk ; k<min(kk+tile,U) ; k++) { // pay attention to the limits
                 tmp += A[i*U+k] * B[k*N+j];
             }
         res[j + N * i] = tmp;
@@ -206,7 +228,8 @@ matmult_naive_kernel( const unsigned int M,  // outer y limit
 }
 
 
-// tiled version of matrix multiplication does not work... :-(
+// tiled shared mem version of matrix multiplication does not work... :-(
+// unless tile size =1 ... 
 template<class T> __global__ void
 matmult_tile_kernel( const unsigned int M,  // outer y limit
                      const unsigned int U,  // k from 0 to u, match dim
@@ -215,31 +238,32 @@ matmult_tile_kernel( const unsigned int M,  // outer y limit
                      T*                 B,  // input  UxN
                      T*                 res // output MxN
 ) {
-    __shared__ T Ash[TILE_SIZE][TILE_SIZE+1], Bsh[TILE_SIZE][TILE_SIZE+1];
-    const unsigned int j = blockIdx.x * blockDim.x + threadIdx.x;
-    const unsigned int i = blockIdx.y * blockDim.y + threadIdx.y;
+    __shared__ T Ash[TILE_SIZE][TILE_SIZE], Bsh[TILE_SIZE][TILE_SIZE];
     const unsigned int x = threadIdx.x;
     const unsigned int y = threadIdx.y;
-    const unsigned int tile = blockDim.x;
+    const unsigned int tile = blockDim.x; // = blockDim.y
+
+    const unsigned int jj = blockIdx.x * tile;
+    const unsigned int j  = jj + x;
+    const unsigned int ii = blockIdx.y * tile;
+    const unsigned int i  = ii + y;
+
     float tmp = 0.0;
     for (int kk=0 ; kk<U ; kk+=tile) {
-        Ash[y][x] = (kk+x)<U ? A[i+(kk+x)*U] : 0.0 ;
-        Bsh[y][x] = (kk+y)<U ? B[(kk+x)+j*N] : 0.0 ;
+        Ash[y][x] = ((i<M) && ((kk+x)<U)) ? A[i*U+(kk+x)] : 0.0 ;
+        Bsh[y][x] = ((j<N) && ((kk+y)<U)) ? B[(kk+y)*N+j] : 0.0 ;
         __syncthreads();
-        for (int k=kk ; k<U ; k+=1) {
+        for (int k=0 ; k<tile ; k++) {
             tmp += Ash[y][k] * Bsh[k][x];
         }
         __syncthreads();
+    }
     if ((j < N) & (i < M)) {
         res[j + N * i] = tmp;
     }
-    }
+    
 }
     
-
-
-
-
 
 
 
