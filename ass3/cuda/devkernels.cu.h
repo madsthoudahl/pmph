@@ -55,7 +55,6 @@ transpose_opt_kernel( const unsigned int cols_out, const unsigned int cols_in, T
     y = blockIdx.x * blockDim.x + threadIdx.y;
 
     if ((y < cols_in) & (x < cols_out)) {
-    //if (inside) {
         d_out[y * cols_out + x] = tile_mem[threadIdx.x][threadIdx.y];
     }
     
@@ -155,7 +154,7 @@ matmult_tile_kernel( const unsigned int M,  // outer y limit
                      T*                 B,  // input  UxN
                      T*                 res // output MxN
 ) {
-    __shared__ T Ash[TILE_SIZE][TILE_SIZE], Bsh[TILE_SIZE][TILE_SIZE];
+    __shared__ T Ash[TILE_SIZE+1][TILE_SIZE+1], Bsh[TILE_SIZE+1][TILE_SIZE+1];
     const unsigned int x = threadIdx.x;
     const unsigned int y = threadIdx.y;
     const unsigned int tile = blockDim.x; // = blockDim.y
