@@ -3,422 +3,363 @@
 \usepackage[utf8]{inputenc}
 \usepackage{amsmath}
 \usepackage{parskip}
-\renewcommand\thesection{\Roman{section}}
-\renewcommand\thesubsection{\Roman{section}.\arabic{subsection}}
-\renewcommand\thesubsubsection{\Roman{section}.\arabic{subsection}.\alph{subsubsection}}
+\renewcommand\thesection{\arabic{section}}
+\renewcommand\thesubsection{\arabic{section}.\alph{subsection}}
+\renewcommand\thesubsubsection{\arabic{section}.\alph{subsection}.\roman{subsubsection}}
 
 %opening
-\title{Assignment 2  \\Programming Massively Parallel Hardware }
+\title{Assignment 3 \\ Optimizing CUDA programs \\Programming Massively Parallel Hardware }
 \author{Mads Thoudahl /qmh332}
 
 \begin{document}
 
 \maketitle
 
-To improve readability of my solutions, some extra pages have been used although not utilized to its capacity.
-Sorry for the late handin, but i wanted to be able to include any reporting issues pointed out in the feedback from the first assignment... And as i have small children, not all of my weekend can be reserved..
-
-
-
-\vfill
-\section{CUDA Programming with reduce and Segmented Scan}
-
-
-\vfill
-\subsection{Task 1 Implement ExclusiveScan and SegmentedExclusiveScan}
-By using the already implemented \texttt{ScanInclusive} code, the algorithm will look something like this:
-
-\begin{verbatim}
- ScanExc(arr_in):
-   arr_tmp       <- ScanInc OP       # [a1, a1 OP a2, ..., a1 OP .. OP an ]
-   arr_out[1:n]  <- arr_tmp[0:n-1]   # Shift Right operation   - O(N/P)
-   arr_out[0]    <- neutral element  # insert neutral element  - O(N/P)
-   return arr_out
-\end{verbatim}
-
-The attached code compiles and runs, and does indeed test the (segmented)ScanExclusive implementation.
 \vfill
 
-\newpage
+All functions are implemented in the following five files: \\
+\texttt{test.cu} - testruns and output printing. \\
+\texttt{hostlib.cu.h} - implementation of helper functions, CPU versions, timings, and preparations of device calls. \\
+\texttt{devlib.cu.h} - implementation of device configuration, version handling, and device kernel calls. \\
+\texttt{devkernels.cu.h} - implementation of the actual device kernels used. \\
+\texttt{Makefile} - few modifications compared to handout version.
 
-\subsection{Task 2 - Implement MaximumSegmentSum problem}
-Algorithm implemented:
+Parameters can be tweaked the following 2 places: TILE\_SIZE, and BLOCK\_SIZE as \texttt{\#define}'s in \texttt{devkernels.cu.h} and the integers used to call the \texttt{test*}-functions which determines the problem sizes used in the calculations.
+
+the files are zipped and the commands needed when running the files are:
+\texttt{make run} and \texttt{make clean}. Enjoy.
+
+All timings are done in a fashion where memory transfers to and from device are excluded.
+
+\vfill
+\section{Matrix transposition}
+
+From the program output underneath, we see that matrix transposition is extremely fast on the GPU as compared to the CPU. 
+This example shows that a transpose taking almost 7 seconds on a CPU takes around 3 milliseconds on the optimal version on the GPU.
+This is a speed improvement comparable to the number of cores (2880) on the GPU device, a 3 orders of magnitude speedup.
+
+Comparing the two GPU implementations, the tiling technique, means that the coalesced memory operations provides a 2.0 speedup.
+
+\vfill
+
 \begin{verbatim}
- ScanExc(arr_in):
-   arr_myint4    <- Conversion(arr_in) # [(a1,a1,a1,a1),..,(an,an,an,an)]
-   arr_tmp       <- ScanInc MsspOp     # [A1, A1 OP A2, ..., A1 OP .. OP An ]
-   res_myint4    <- arr_tmp[last]      # A1 OP A2 OP .. OP An
-   res           <- choose(res_myint4) # (res, _mis, _mcs, _ts)
-   return res
-\end{verbatim}
-As I had a bit of inconvenience using scalar int type, while implementing, I chose to 'get on' returning an entire array with a single value (i know that is a waste, i will correct if it has any impact on score).
+ASSIGNMENT3 TASK1: MATRIX TRANSPOSITION
 
-\begin{verbatim}
-from ScanKernels.cu.h
-msspTrivialMap(int* inp_d, MyInt4* inp_lift, int inp_size) {
-    const unsigned int gid = blockIdx.x*blockDim.x + threadIdx.x;
-    if(gid < inp_size) {
-        int x = inp_d[gid];
-        if ( x > 0 ) inp_lift[gid] = MyInt4 ( x, x, x, x);
-        else inp_lift[gid] = MyInt4 ( 0, 0, 0, x);
-    }
-}
+Transpose Matrix sized 8192 x 8192 running times
+CPU:              6964901 microsecs. 
+GPU naïve:           6145 microsecs. --  VALID
+GPU optimized:       3068 microsecs. --  VALID
 
-class MsspOp {
-  public: ..
-    static __device__ inline MyInt4 apply(volatile MyInt4& t1, volatile MyInt4& t2) {
-        int mss = max( max( t1.x, t2.x ),( t1.z + t2.y )); // max segment sum
-        int mis = max( t1.y, ( t1.w + t2.y ));             // max initial sum
-        int mcs = max(( t1.z + t2.w ), t2.z);              // max conclusive sum
-        int t   = (t1.w+ t2.w);                            // total sum
-        return MyInt4(mss, mis, mcs, t);    }     
-};
-\end{verbatim}
-See attached code for further insights
-Code runs and successfully tests the quite boring array [1,1,1,1,..] where \texttt{mss=n} and n is length of array.
+Giga MemoryOPerations per second:
+CPU:                0.019 Gmop/s.
+GPU naïve:         21.842 Gmop/s.
+GPU optimized:     43.748 Gmop/s.
 
-
-\newpage
-\subsection{Task 3 - Implement Sparse Vector Matrix Multiplication in CUDA}
-
-\subsubsection{Nested implementation in haskell}
-\begin{verbatim}
-nestSparseMatVctMult :: [[(Int,Double)]] -> [Double] -> [Double]
-nestSparseMatVctMult mat vec =
-    map (\row -> let (idxs,vals) = unzip row
-                     vvals       = map (\idx ->  vec !! idx) idxs
-                     prods       = map (\(x,y)-> x*y) (zip vals vvals)
-                     res         = scanInc (+) 0 prods
-                 in  last res
-        ) mat
+This is a speedup of    2.00, for tile and coalesced mem accesses on GPU.
+... and a speedup of 1133.24, for GPU naive compared to CPU.
+... and a speedup of 2269.44, for GPU opt   compared to CPU.
 \end{verbatim}
 
-This Piece of code is tested and works on my own unstructured tests and correctly calculates the matrix in the \texttt{main} function of \texttt{PrimesQuickSort.hs}.
 
-\subsubsection{flattened implementation in haskell}
-In the \texttt{vvals} and \texttt{prods} we have a map inside a map, easily resolved by the 2nd rule.
-in the \texttt{res}, the scan is converted to a segmented scan, no problemo..
-The problem appears on retrieving the last result, when it is hidden inside a list of segments.
+\subsection{Matrix transposition CPU} implementation reduced from hostlib.cu.h:
 \begin{verbatim}
-flatSparseMatVctMult :: [Int] -> [(Int,Double)] -> [Double] -> [Double]
-flatSparseMatVctMult flags mat vec =                           -- flags   [1,0,1,0,0,1,0,0,0]
-  let tot_num_elems = length flags
-      vlen          = length vec
-      (idxs, vals)  = unzip mat
-      result        = replicate (last $ scanInc (+) 0 flags) 0
-      vvals         = map (\idx -> vec !! idx) idxs
-      prods         = map (\(val, vval) -> val * vval) (zip vals vvals)
-      rowsizes      = zipWith (*) flags (scanInc (+) 0 flags)  -- goal    [2,0,3,0,0,4,0,0,0] - failed!
-      sgmres        = segmScanInc (+) 0 rowsizes prods         -- resuls  [_,r,_,_,r,_,_,_,r]
-      matchidx      = [0..]                                    -- matchidx[0,1,2,3,4,5,6,7,8]
-      residx        = map (\x -> x-1) (scanInc (+) 0 rowsizes) -- res idx [1,1,4,4,4,8,8,8,8]
-      newidx        = map (\x -> x-1) (scanInc (+) 0 flags)    -- new idx [0,0,1,1,1,2,2,2,2]
-      _write        = map (\(rres,mi,ri,ni) -> if (mi==ri) then write [ni] [rres] result
-                                                           else write  [0] [rres]  prods ) -- dummy, but else required
-      -- would use if/else here but last overwrite fixes this, will use if/else in cuda version!
-             (zip4 sgmres matchidx residx newidx)
-     in  result
-\end{verbatim}
-Some difficulties making the last part compile, writing to an array, but the idea should be sound.
-
-The challenge i have not been able to overcome is converting the \texttt{flags} list to a \texttt{sizes} list e.g. [1,0,1,0,0,1,0,0,0] $\rightarrow$ [2,0,3,0,0,4,0,0,0], having the \texttt{rowsizes} failing, thus missing that part in succeeding.
-
-\newpage
-\subsubsection{flattened implementation in cuda}
-Some important parts of the code is presented here, the code in its entirety is attached.
-
-As it turns out, all the map operations of finding out which vector indices and what matrice entries to multiply them with are resolved in \texttt{spMatVctMult\_pairs} function below.
-The summation (reduction) is produced by a segmented inclusive scan op:(+) ne:$0$ function, handling all Matrix columns in parallel, very smooth. Last part sorts out where the results are hiding and digs them out of the scanned array.
-\begin{verbatim}
-spMatVctMult_pairs(int* mat_inds, float* mat_vals, float* vct, int tot_size, float* tmp_pairs) {
-    const unsigned int gid = blockIdx.x*blockDim.x + threadIdx.x;
-    if(gid < tot_size) {
-        tmp_pairs[gid] = vct[ mat_inds[gid] ] * mat_vals[gid];
-    }
-}
-
-write_lastSgmElem(float* tmp_scan, int* tmp_inds, int* flags_d, int tot_size, float* vct_res) {
-    const unsigned int gid = blockIdx.x*blockDim.x + threadIdx.x;
-    if(gid < tot_size) {
-        if ( flags_d[gid+1] != 0 )     // all but the last dotproduct
-            vct_res[tmp_inds[gid]-1] = tmp_scan[gid];
-    } else if (gid == (tot_size-1)) {  // the last dotproduct
-            vct_res[tmp_inds[gid]-1] = tmp_scan[gid];
+template<class T> int transpose_cpu(int rows, int cols, T *m_in, T *m_out ) {
+    for (int row=0; row<rows_in; row++){
+        for (int col=0; col<cols_in; col++) {
+            m_out[col*rows_in+row] = m_in[row*cols_in+col];
+        }
     }
 }
 \end{verbatim}
-The writing back to the correct locations is far easier in the imperative cuda language than in Haskell, which caused the trouble in the previous part of this task. The implementation of \texttt{write\_lastSgmElem} fixes it.
-
-\begin{tabular}{l|cc|r}
-The three steps & Step Complexity & Work Complexity & Comment\\ \hline
-multiplication of pairs into product array & $\mathcal{O}(1)$ & $\mathcal{O}(N)$ & memory improveable \\
-segmented scan of product array & $\mathcal{O}(\log_2 N)$ & $\mathcal{O}(N)$ & asymptotically\\
-locating and writing back results & $\mathcal{O}(1)$ & $\mathcal{O}(N)$ & easier than haskell \\ \hline
-\end{tabular}
-
-All complexity results assumes more than $n/2$ processors, and it leaves an overall step complexity of $\mathcal{O}(\log_2 n)$
 
 \vfill
-Output when run
+
+\subsection{Matrix transposition in OpenMP - omitted}
+focusing on the techniques, using CUDA as the tool.
+
+\vfill
+
+\subsection{Matrix transposition GPU - Naïve} implementations reduced from devkernels.cu.h:
 \begin{verbatim}
- ./sgmScanInc
-sScan Inclusive on GPU runs in: 1371459 microsecs
-sScan Inclusive +   VALID RESULT!
- Scan Inclusive on GPU runs in: 8395 microsecs
- Scan Inclusive +   VALID RESULT!
-sScan Inclusive on GPU runs in: 8108 microsecs
-sScan Inclusive +   VALID RESULT!
- Scan Exclusive on GPU runs in: 7846 microsecs
- Scan Exclusive +   VALID RESULT!
-sScan Exclusive on GPU runs in: 8202 microsecs
-sScan Exclusive +   VALID RESULT!
-MaximumSegmentSum on GPU runs in: 4549 microsecs
-MSS +   VALID RESULT! 987624
-Performing sparse Matrix vector multiplicationsparse Matrix-Vector mult. on GPU runs in: 302 microsecs
-SparseMatrix Vector Multiplication Result:
-[ 3.000000 0.000000 -4.000000 6.000000 ] - calculation
-[ 3.000000 0.000000 -4.000000 6.000000 ] - correct result
+template<class T> __global__ void
+transpose_naive_kernel( cols_out, cols_in, T* d_in, T* d_out ) {
+    const unsigned int xid = blockIdx.x * blockDim.x + threadIdx.x;
+    const unsigned int yid = blockIdx.y * blockDim.y + threadIdx.y;
+
+    int read_idx  = yid * cols_in + xid;
+    int write_idx = xid * cols_out + yid;
+ 
+    if ( (yid < cols_out) & (xid < cols_in) ) {
+        d_out[write_idx] = d_in[read_idx];
+    }
+}
+\end{verbatim}
+
+\vfill
+
+\subsection{Matrix transposition GPU - Optimal} implementations reduced from devkernels.cu.h:
+\begin{verbatim}
+template<class T> __global__ void
+transpose_opt_kernel( int cols_out, int cols_in, T* d_in, T* d_out ){
+    __shared__ T tile_mem[TILE_SIZE][TILE_SIZE+1]; // MEMORY BANK FIX ??
+ 
+    // calculate indexing into global array
+    unsigned int x = blockIdx.x * blockDim.x + threadIdx.x;
+    unsigned int y = blockIdx.y * blockDim.x + threadIdx.y;
+
+    if ((y < cols_out) & (x < cols_in)) {
+        tile_mem[threadIdx.y][threadIdx.x]  = d_in[y * cols_in + x];
+    }
+    __syncthreads();
+    x = blockIdx.y * blockDim.x + threadIdx.x;  // transpose global indexing
+    y = blockIdx.x * blockDim.x + threadIdx.y;
+
+    if ((y < cols_in) & (x < cols_out)) {
+        d_out[y * cols_out + x] = tile_mem[threadIdx.x][threadIdx.y];
+    }
+}
 \end{verbatim}
 \vfill
-The results are tested, and seems to work, so proof of concept... but no timing and comparison of sequential implementation of the like of a matrix multiplication application in this handin.
-
-A bit odd that the first run (scaninc) allways seem very slow.. is it normal?? some initialization problem? 
-
-
 
 \newpage
+\section{Demonstrating the usefullness of matrix transpositions}
 
-\section{Hardware Track Exercises}
-\subsection{Task 1 - 5-Stage pipeline design}
-In all the subtasks I am assuming (knowing it is a modified truth) that all types of branches uses 'one' instruction to perform..
+consulting the output of the program, we see that the second implementation runs approximately 4.5 times faster than the first implementation, despite the extra memory operations, proving the concept of accessing memory in a coalesced manor.
 
-\subsubsection{No forwarding, No hazard detection, rewrite code}
+in the following subsections we try and discover the reasons, and display the techniques used to achieve this performance.
+
+
 \begin{verbatim}
-          OPERATION         |  COMMENT
- ________________________________________________________________________________________________
- SEARCH:  LW   R5 0(R3)     |
-          NOOP              |  RAW HAZARD - R5
-          NOOP              |  RAW HAZARD - R5
-          NOOP              |  RAW HAZARD - R5
-          SUB  R6 R5 R2     |
-          NOOP              |  RAW HAZARD - R6
-          NOOP              |  RAW HAZARD - R6
-          NOOP              |  RAW HAZARD - R6
-          BNEZ R6 NOMATCH   |  Branch?? Considerations of consequences below
-          ADDI R1 R1 #1     |  On branch, simply omit writeback to R1, no harm done
- NOMATCH: ADDI R3 R3 #4     |  On branch, this instruction will be fetched more than once,
-                            |  but omitting WB to R3 in first execution will remedy the situation
-          NOOP              |  RAW HAZARD - R3
-          NOOP              |  RAW HAZARD - R3
-          NOOP              |  RAW HAZARD - R3
-          BNE  R4 R3 SEARCH |
+ASSIGNMENT3 TASK2: MATRIX TRANSPOSITION AS PREPROCESSING
+
+Matrix accfun on size 393216 x 64. Running times:
+CPU:               457792 microsecs. 
+GPU first:          18567 microsecs. --  VALID
+GPU second:          4109 microsecs. --  VALID
+
+This is a speedup of    4.52, for second compared to first on GPU.
+... and a speedup of   24.65, for GPU first  compared to CPU.
+... and a speedup of  111.38, for GPU second compared to CPU.
 \end{verbatim}
+
+\vfill
+
+\subsection{Reason about top-level parallellism of the code}
+
+Original matrix accumulation function
+\begin{verbatim}
+ 1 for i from 0 to N-1
+ 2     accum = A[i,0] * A[i,0]
+ 3     B[i,0] = accum
+ 4     for j from 1 to 63
+ 5         tmpA = A[i,j]
+ 6         accum = sqrt(accum) + tmpA * tmpA
+ 7         B[i,j] = accum
+\end{verbatim}
+
+\subsubsection{The outer loop}
+Assuming that \texttt{tmpA} and \texttt{accum} are initialized and declared outside of the loop, the outer loop is not parallel because we have a loop-carried dependency in the \texttt{accum} variable. If parallellized, all threads running the outer loop wants to write to the same \texttt{accum} variable. 
+This is remedied by privatizing the \texttt{accum} variable, declaring it inside the loop, or equivalently performing an array-expansion, that is providing one for each thread \texttt{i} running the outer loop, and distributing the loop.
+
+Rewritten matrix accumulation function:
+\begin{verbatim}
+ 0 float* accum[N];                // create N accum variables
+ 1 for i from 0 to N-1             // one for each parallel thread
+ 2     accum[i] = A[i,0] * A[i,0]  // use private accum[i]
+ 3     B[i,0] = accum[i]           
+ 4     for j from 1 to 63
+ 5         tmpA = A[i,j]
+ 6         accum[i] = sqrt(accum[i]) + tmpA * tmpA
+ 7         B[i,j] = accum[i]
+\end{verbatim}
+
+
+\subsubsection{The inner loop}
+the inner loop is not parallel as we have a cross-iteration dependency in the accum variable yet again.
+the accum variable is written at every iteration and read in the next iteration.
+At iteration j, we read A[i,j] and accum, accum has a \texttt{True Dependency} as it is written in previous iteration (j-1), and in iteration (j) we again write to accum.
+
+We may try to check if loop interchange is an option, but as the accum is written in the outer loop and read at the inner loop, thus it is not.
+This behavior is not secure, it indicates a problem. 
+This dendency cannot be resolved.
+
+\subsubsection{Inner loop rewrite I}
+As we investigate, we find the problem really is that we apply the sqrt() operation to accum, which is unary, thus does not fulfil the demands of a monoid, being a binary operator.
+
+\subsubsection{Inner loop rewrite II}
+If line 6 is rewritten:   \texttt{accum += A[i,j] * A[i,j]} then it is seen that this can be rewritten into 
+\begin{verbatim}
+ // i being index of outer loop
+ tmp  = map sqrt() A[i]
+ B[i] = scan( (+) 0 tmpA )
+\end{verbatim}
+
+ 
+\vfill
+
+\subsection{Bonus: OpenMP solution - Omitted}
+focusing on the techniques, using CUDA as the tool.
+
+
+\subsection{First CUDA version of code}
+pretty much as the handed out code, although the \texttt{accum} and \texttt{tmp} variables have been privatized.
+\begin{verbatim}
+  1 template<class T> __global__ void
+  2 mat_acc_first_kernel( int rows_in, int cols_in, T* d_in, T* d_out ) {
+  3     int gid = blockIdx.x * blockDim.x + threadIdx.x;
+  4     if (gid < rows_in) {
+  5         T accum =  d_in[gid*cols_in] * d_in[gid*cols_in];
+  6         d_out[gid*cols_in] = accum;
+  7         T tmp;
+  8         for (int i=1; i < cols_in; i++) {
+  9             tmp    = d_in[gid * cols_in + i];
+ 10             accum  = sqrt(accum) + tmp*tmp;
+ 11             d_out[gid * cols_in + i] = accum;
+ 12         }
+ 13     }
+ 14 }
+\end{verbatim}
+
+\vfill
+
+\subsection{Second version of code}
+
+
+Transpose the input, and the output, making way for coherence in memory accesses.
+\begin{verbatim}
+ transpose<T>( rows_in, cols_in, d_in, d_in_t );
+ mat_acc_second_kernel<T><<< num_blocks, block_size >>>( cols_in, rows_in, d_in_t, d_out_t );
+ transpose<T>( cols_in, rows_in, d_out_t, d_out );
+\end{verbatim}
+
+Kernel code:
+\begin{verbatim}
+  1 template<class T> __global__ void
+  2 mat_acc_second_kernel( int rows_in, int cols_in, T* d_in, T* d_out ) {
+  3     int gid = blockIdx.x * blockDim.x + threadIdx.x;
+  4     if (gid < cols_in) {
+  5         T accum =  d_in[gid]*d_in[gid];
+  6         T tmp;
+  7         d_out[gid] = accum;
+  8         for (int i=1; i < rows_in; i++) {
+  9             tmp    = d_in[gid + cols_in * i];
+ 10             accum  = sqrt(accum) + tmp*tmp;
+ 11             d_out[gid + cols_in * i] = accum;
+ 12         }
+ 13     }
+ 14 }
+\end{verbatim}
+
+\vfill
 
 \newpage
-\subsubsection{No forwarding, Hazard detection stalls, count clockcycles used}
+\section{Dense matrix multiplication}
+Looking to the output of the program underneath, we see that the calculation of the matrix multiplication on two 1280x1280 matrices takes around 11.7 seconds to perform for the CPU.
+This is performed so much faster by the optimal GPU version timed at 11.4 milliseconds, which yet improves the naïve GPU implementation by a 2.5x speedup.
 
-17 Clockcycles are used on a matching word.
+Calculating the number of floating point operations per second, in Giga ($10^9$) Flop per second or just Gflop/s.
+We see that the optimized implementation scores an amazing 367.98 Gflops/s, 3 orders of magnitude more than the serial implementation.
+
+in the following subsections we display the techniques and implementations used to achieve this performance.
+
 \begin{verbatim}
- CLK    (OPERATION)/PHASES         |  COMMENT   HDU:HazardDetectionUnit
- ________________________________________________________________________________________________
-    (LW)  
- 1   IF (SUB)
- 2   ID  IF (BNEZ) 
- 3   EX  ID  IF                           | HDU reports hazard on R5 and stalls
- 4   MEM ID  IF     
- 5   WB  ID  IF 
- 6       ID  IF (ADDI)
- 7       EX  ID  IF                       | HDU reports hazard on R6 and stalls
- 8       MEM ID  IF    
- 9       WB  ID  IF  
-10           ID  IF (ADDI)
-11           EX  ID  IF (BNE)
-12           MEM EX  ID  IF (??)          | HDU reports hazard on R3 and stalls
-13           WB  MEM EX  ID  IF           
-14               WB  MEM ID  ..   
-15                   WB  ID  .. 
-16                       ID  .. (??)      | both ?? ops are skipped due to repeat of search
-17                       EX  ..  IF (LW)  | Repeats search...
-18                       MEM ..  ..  IF   
+ASSIGNMENT3 TASK3: MATRIX MULTIPLICATION
+
+Matrix Multiplication on (1280x1280) x (1280,1280). Timings:
+CPU:             11709561 microsecs. 
+GPU naïve:          28865 microsecs. --  VALID
+GPU optimized:      11398 microsecs. --  VALID
+
+Giga FLoatingpointOPerations per second:
+CPU:                0.358 Gflop/s.
+GPU naïve:        145.308 Gflop/s.
+GPU optimized:    367.986 Gflop/s.
+
+This is a speedup of    2.53, for second compared to first on GPU.
+... and a speedup of  405.65, for GPU naive compared to CPU.
+... and a speedup of 1027.24, for GPU opt   compared to CPU.
 \end{verbatim}
 
+\vfill
 
-
-18 Clockcycles are used on a word not matching.
+\subsection{Matrix multiplication CPU} implementation reduced from hostlib.cu.h. No parallellism exploited, sequential implementation:
 \begin{verbatim}
- CLK    (OPERATION)/PHASES         |  COMMENT    |.. means WB disabled
- ________________________________________________________________________________________________
- 0  (LW)  
- 1   IF (SUB)
- 2   ID  IF (BNEZ) 
- 3   EX  ID  IF                           | HDU reports hazard on R5 and stalls
- 4   MEM ID  IF     
- 5   WB  ID  IF 
- 6       ID  IF (ADDI)
- 7       EX  ID  IF                       | HDU reports hazard on R6 and stalls
- 8       MEM ID  IF    
- 9       WB  ID  IF  
-10           ID  IF (ADDI)
-11           EX  ID  IF (ADDI)            | BNEZ JUMP! to address of 2nd ADDI instruction
-12           MEM ..  ..  IF (BNE)
-13           WB  ..  ..  ID  IF (??)      | 
-14               ..  ..  EX  ID  IF       | HDU reports hazard on R3 and stalls
-15                   ..  MEM ID  ..  
-16                       WB  ID  .. 
-17                           ID  .. (??)
-18                           EX  ..  IF (LW)    | Repeats search
-19                           MEM ..  ..  IF
+  1 template<class T> int
+  2 matmult_cpu( int rows_in_a, int cols_in_a, T* h_in_a, int rows_in_b, int cols_in_b, T* h_in_b, T* h_out ) {
+  3     float tmp;
+  4     for (int i=0 ; i<rows_in_a ; i++ ) {
+  5         for (int j=0 ; j<cols_in_b ; j++) {
+  6             tmp = 0;
+  7             for (int k=0 ; k<cols_in_a ; k++) {
+  8                 tmp += h_in_a[i*cols_in_a+k] * h_in_b[k*cols_in_b+j];
+  9             }
+ 10             h_out[i*cols_in_b + j] = tmp;
+ 11         }
+ 12     }
+ 13 }
 \end{verbatim}
 
-\newpage
-\subsubsection{Assuming internal register forwarding}
-I assume that internal register forwarding means that the values of a given register currently written is available to next ID in the same cycle as WB..
+\vfill
 
-14 Clockcycles are used on a matching word.
+\subsection{Matrix multiplication in OpenMP - omitted}
+focusing on the techniques, using CUDA as the tool.
+
+\vfill 
+
+\subsection{Matrix multiplication GPU - Naïve} implementations reduced from devkernels.cu.h: \\
+using loop unroll technique in both x and y dimension, we end up with 2 outer parallel loops representing the grid of parallellism in the kernel call, thus not represented in the kernel implementation.
+privatization of tmp variable.
 \begin{verbatim}
- CLK    (OPERATION)/PHASES         |  COMMENT   HDU:HazardDetectionUnit
- ________________________________________________________________________________________________
-    (LW)  
- 1   IF (SUB)
- 2   ID  IF (BNEZ) 
- 3   EX  ID  IF                           | HDU reports hazard on R5 and stalls
- 4   MEM ID  IF     
- 5   WB  ID  IF (ADDI)
- 6       EX  ID  IF                       | HDU reports hazard on R6 and stalls
- 7       MEM ID  IF    
- 8       WB  ID  IF (ADDI) 
- 9           EX  ID  IF (BNE)
-10           MEM EX  ID  IF (??)          | HDU reports hazard on R3 and stalls
-11           WB  MEM EX  ID  IF           
-12               WB  MEM ID  ..   
-13                   WB  ID  .. (??)      | both ?? ops are skipped due to repeat of search
-14                       EX  ..  IF (LW)  | Repeats search...
-15                       MEM ..  ..  IF   
+  1 template<class T> __global__ void
+  2 matmult_naive_kernel( int M, int U, int N, T* A, T* B, T* res ) {
+  3     int j = blockIdx.x * blockDim.x + threadIdx.x;
+  4     int i = blockIdx.y * blockDim.y + threadIdx.y;
+  5     if ((j < N) & (i < M)) {
+  6         float tmp = 0.0;
+  7         for (int k=0 ; k<U ; k++) {
+  8             tmp += A[i*U+k] * B[k*N+j];
+  9         }
+ 10         res[j + N * i] = tmp;
+ 11     }
+ 12 }
 \end{verbatim}
 
+\vfill
 
-15 Clockcycles are used on a word not matching.
+
+\subsection{Matrix multiplication GPU - Optimal} implementations reduced from devkernels.cu.h.\\
+same parallel exploitations as in the naïve version, and further on...\\
+line 3: allocating shared memory a bit more mem is allocated than needed, to avoid memory bank conflicts.\\
+line 12-20 loop unrolling in the U-dimension.
+line 13-14, storing the input data in shared memory, reading from global memory in a \textit{coalesced} manor.\\
+line 17 using the shared memory to calculate the output.\\
+line 22 single store in global memory
 \begin{verbatim}
- CLK    (OPERATION)/PHASES         |  COMMENT    |.. means WB disabled
- ________________________________________________________________________________________________
- 0  (LW)  
- 1   IF (SUB)
- 2   ID  IF (BNEZ) 
- 3   EX  ID  IF                           | HDU reports hazard on R5 and stalls
- 4   MEM ID  IF     
- 5   WB  ID  IF (ADDI)
- 6       EX  ID  IF                       | HDU reports hazard on R6 and stalls
- 7       MEM ID  IF    
- 8       WB  ID  IF (ADDI)
- 9           EX  ID  IF (ADDI)            | BNEZ JUMP! to address of 2nd ADDI instruction
-10           MEM ..  ..  IF (BNE)
-11           WB  ..  ..  ID  IF (??)      | 
-12               ..  ..  EX  ID  IF       | HDU reports hazard on R3 and stalls
-13                   ..  MEM ID  ..  
-14                       WB  ID  .. (??)
-15                           EX  ..  IF (LW)    | Repeats search
-16                           MEM ..  ..  IF
+ 1 template<class T> __global__ void
+ 2 matmult_tile_kernel( int M, int U, int N, T* A, T* B, T* res ) {
+ 3     __shared__ T Ash[TILE_SIZE+1][TILE_SIZE+1], Bsh[TILE_SIZE+1][TILE_SIZE+1];
+ 4     int x = threadIdx.x;
+ 5     int y = threadIdx.y;
+ 6     int tile = blockDim.x; // = blockDim.y
+ 7 
+ 8     int j  = blockIdx.x * tile + x;
+ 9     int i  = blockIdx.y * tile + y;
+10
+11     float tmp = 0.0;
+12     for (int kk=0 ; kk<U ; kk+=tile) {
+13         Ash[y][x] = ((i<M) && ((kk+x)<U)) ? A[i*U+(kk+x)] : 0.0 ;
+14         Bsh[y][x] = ((j<N) && ((kk+y)<U)) ? B[(kk+y)*N+j] : 0.0 ;
+15         __syncthreads();
+16         for (int k=0 ; k<tile ; k++) {
+17             tmp += Ash[y][k] * Bsh[k][x];
+18         }
+19         __syncthreads();
+20     }
+21     if ((j < N) & (i < M)) {
+22         res[j + N * i] = tmp;
+23     }
+24 }
 \end{verbatim}
-
-
-
-
-\newpage
-
-\subsubsection{Assuming full forwarding and hazard detection}
-
-10 Clockcycles are used on a matching word. Additional 2 clocks are used after last search to complete writeback phase.
-\begin{verbatim}
- CLK    (OPERATION)/PHASES         |  COMMENT   HDU:HazardDetectionUnit
- ________________________________________________________________________________________________
-    (LW)  
- 1   IF (SUB)
- 2   ID  IF (BNEZ) 
- 3   EX  ID  IF                           | HDU reports hazard on R5 and stalls
- 4   MEM ID  IF     
- 5   WB  ID  IF (ADDI)
- 6       EX  ID  IF (ADDI)                | Forwarding value
- 7       MEM EX  ID  IF (BNE)             | Forwarding value
- 8       WB  MEM EX  ID  IF (??)
- 9           WB  MEM EX  ID  IF (??)      | both ?? ops are skipped due to repeat of search
-10               WB  MEM EX  ..  IF (LW)  | Repeats search...
-11                   WB  MEM ..  ..  IF    
-12                       WB  ..  ..
-\end{verbatim}
-
-
-11 Clockcycles are used on a word not matching.
-\begin{verbatim}
- CLK    (OPERATION)/PHASES         |  COMMENT   HDU:HazardDetectionUnit
- ________________________________________________________________________________________________
-    (LW)  
- 1   IF (SUB)
- 2   ID  IF (BNEZ) 
- 3   EX  ID  IF                               | HDU reports hazard on R5 and stalls
- 4   MEM ID  IF     
- 5   WB  ID  IF (ADDI)                    
- 6       EX  ID  IF (ADDI)                    | Forwarding value
- 7       MEM EX  ID  IF (ADDI)                | BNEZ JUMP! to address of 2nd ADDI instruction
- 8       WB  MEM ..  ..  IF (BNE)
- 9           WB  ..  ..  ID  IF (??)      
-10               ..  ..  EX  ID  IF (??)      | fwd R3 to BNE
-11                   ..  MEM EX  ..  IF (LW)  | both ?? ops are skipped due to repeat of search
-12                       WB  MEM ..  ..  IF   | Repeats search...
-\end{verbatim}
-
-\subsubsection{improvements}
-By unrollin the loop, more values can be loaded into the registers, avoiding the hazards, thus avoid stalling - minimum 2 more registers are needed.
-As branching takes more time, make the common case faster by rewriting the code to branch in the lesser common case.. i.e. on a match..
-If search area is not divisible by \# regs used in loop unroll, some code has to be included to correctly handle the end-case.
-Delayed branching will not help much for this chunk of code, as we have got 2 branches in 6 instructions, thus not enough instructions to fill in the 2 slots behind the branches.
-If one performs a software pipelining, one just might be able to utilize the 2 slots in the delayed branching, But it will have an impact on the amount of used registers.
-
-
-\newpage
-\subsection{Task 2 - Vector Machines}
-\subsubsection{The machine code with vector instructions for each 64 bit slice using loads and arithmetic instructions}
-We have 8 vector registers, performing 2 operations will be possible at the same time as both use 3.
-This assumes that there exist 2 MUL components..
-
-I believe the code underneath produces a 2 vector ops in parallel, reducing the needed loops to 8 (instead of 16).
-\begin{verbatim}
-        OPERATION                |  COMMENT
- __________________________________________________________________________________________
-        ADDI   R5    R0    #1024 | Set length of calculation
-        ADDI   R4    R0    #1    | Set Register4 to 1 (the stride) 
- LOOP:                           | ASSUME 2 MUL COMPONENTS
-        L.V    V1    0(R1) R4    | Load from pos in Reg1 by the stride of 1 into Vreg1
-        L.V    V2    0(R2) R4    | Load from pos in Reg2 by the stride of 1 into Vreg2
-        ADDI   R1    R1    #512  | update address for R1 for next iteration
-        ADDI   R2    R2    #512  |  --||-- for R2 (assuming length of '8' Bytes - doubles)
-        L.V    V3    0(R1) R4    | Load from pos in Reg1 by the stride of 1 into Vreg3
-        L.V    V4    0(R2) R4    | Load from pos in Reg2 by the stride of 1 into Vreg4
-        ADDI   R1    R1    #512  | update address for R1 for next iteration
-        ADDI   R2    R2    #512  |  --||-- for R2 (assuming length of '8' Bytes - doubles)
-
-        MUL.V  V5    V1    V2    | V5 <- V1 * V2   elementwise
-        MUL.V  V6    V1    V2    | V6 <- V3 * V4   elementwise
-
-        S.V    V5    0(R3)       | Store to mem starting at pos at R3
-        ADDI   R3    R3    #512  | Update address for R3 (store address)
-        S.V    V6    0(R3)       | Store to mem starting at pos at R3
-        ADDI   R3    R3    #512  | Update address for R3 (store address)
-
-        SUBBI  R5    R5    #128  | Update outer loop index counter  by 2*64  
-        BNEZ   R5    LOOP        | Repeat until end of calc
-\end{verbatim}
-
-
-\subsubsection{Compute the time taken (in clocks) by a dot product of size 1024}
-Using the code above we get:
-$$ T_{execution} = startup(load) + startup(mul) + startup store + Number of vectors * Vector Length $$
-$$ T_{execution} = 30 + 10 + 30 + (16/2) * 64  = 582 $$
-I neglect the few instructions might be involved by duplicating the code (estimated 5-8 clc), and the time used to sum up the stored vector.
-
-
-\subsubsection{Compute the time taken (in clocks) by a matrix multiplication of two 1024 x 1024 matrices}
-Each entrance of the resulting matrix is created by a dotproduct of two 1024 vectors. as there exist $1024^2$ entrances, each taking $582$ clockcycles to calculate (neglecting the addition phase).
-$$T_{mmul} = 582 \cdot 1024^2 \sim 610.3 M clocks $$
-This assumes the matrices are represented as dense matrices, which each takes up $8*1024*1024 \sim 8 M $ Bytes of data.
+\vfill
 
 \end{document}
