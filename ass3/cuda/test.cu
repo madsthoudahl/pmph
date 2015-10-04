@@ -12,12 +12,12 @@
 void task_one(int M, int N, bool verbose);
 void task_two(int M, int N, bool verbose);
 void task_three(int M, int U, int N, bool verbose);
-int warmup(const unsigned int size);
+void warmup(const unsigned int size);
 
 
 // main test program
 int main(int argc, char** argv) {
-    warmup(8*1024); // sole purpose is 'warming up GPU' so that timings get valid downstream.
+    warmup(1024); // sole purpose is 'warming up GPU' so that timings get valid downstream.
     task_one(   (8*1024)   , (8*1024), false);
     task_two(   (6*64*1024), (64)    , false);
     task_three( (5*256)    , (5*256) , (5*256), false);
@@ -325,12 +325,16 @@ void task_three(int M, int U, int N, bool verbose){
 
 
 
-int warmup(const unsigned int size){
+void warmup(const unsigned int size){
     // performing max segment sum calculation for GPU warmup purpose
-    int* h_in = (int*) malloc( size * sizeof(int));
+    int *h_in  = (int*) malloc( size*size * sizeof(int));
+    int *h_out = (int*) malloc( size*size * sizeof(int));
 
     for(unsigned int i=0; i<size; i++) h_in[i] = 1;
 
-    int res = maxSegmentSum_gpu( size, h_in );
-    return res;
+    transpose_gpu<int>( size, size, h_in, h_out );
+
+    free(h_in);
+    free(h_out);
+    return;
 }

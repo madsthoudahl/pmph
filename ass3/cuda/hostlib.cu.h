@@ -34,15 +34,6 @@ template<class T> unsigned long int matrix_accfun_gpu(const unsigned int, const 
 template<class T> unsigned long int matmult_cpu(const unsigned int, const unsigned int, T*, const unsigned int, const unsigned int, T*, T*);
 template<class T> unsigned long int matmult_gpu(const unsigned int, const unsigned int, T*, const unsigned int, const unsigned int, T*, T*, const unsigned char version=0, const unsigned char tile_size=0);
 
-// (SEGMENTED) SCAN INCLUSIVE (WRAPPER TO PROVIDED FUNCTION)                  //
-template<class OP, class T> void scanInc_gpu( const unsigned long, T*, T* );
-template<class OP, class T> void sgmScanInc_gpu( const unsigned long, T*, int*, T* );
-
-// MAXIMUM SEGMENT SUM (ASS2 PART1 TASK2)                                     //
-int maxSegmentSum_gpu( const unsigned int, int*); 
-
-// SPARSE MATRIX VECTOR MULTIPLICATION  (ASS2 PART1 TASK3)                    //
-void spMatVecMult_gpu( const unsigned int, int*, int*, float*, float*, const unsigned int, float*);
 
 // HELPER FUNCTIONS TO TIME AND VALIDATE (COULD BE MOVED OUT OF THIS LIBRARY) //
 int timeval_subtract(struct timeval *result, struct timeval *t2, struct timeval *t1);
@@ -53,8 +44,6 @@ void matprint(const unsigned int, const unsigned int, int* );
 void matprint(const unsigned int, const unsigned int, float* );
 void matprint(const unsigned int, const unsigned int, double* );
 template<class T> void mprinter(const unsigned int rows_in, const unsigned int cols_in, T start);
-
-
 
 
 
@@ -139,6 +128,9 @@ template<class T> unsigned long int transpose_gpu( const unsigned int    rows_in
 }
 
 
+
+
+
 /** MATRIX ACCUMULATION FUNCTION (ASS3 TASK2)                                  *
  *  semantics: for i from 0 to n-1  // outer loop                              *
  *               accum  = A[i,0] * A[i,0]                                      *
@@ -188,6 +180,7 @@ unsigned long int matrix_accfun_cpu( int rows_in,
 
     return elapsed;
 }
+
 
 template<class T> 
 unsigned long int matrix_accfun_gpu( const unsigned int   rows_in, 
@@ -289,6 +282,7 @@ unsigned long int matmult_cpu(
     return elapsed;
 }
 
+
 template<class T> 
 unsigned long int matmult_gpu( 
                   const unsigned int  rows_in_a, 
@@ -336,173 +330,6 @@ unsigned long int matmult_gpu(
 
     return elapsed;
 }
-
-/******************************************************************************/
-/* PREVIOUSLY IMPLEMENTED FUNCTIONS                                           */
-/******************************************************************************/
-
-
-/** (SEGMENTED) SCAN INCLUSIVE - TEMPLATE                       *
- *                                                              *
- * size       is the size of both the input and output arrays.  *
- * h_in       is the host array; it is supposably               *
- *                allocated and holds valid values (input).     *
- * (h_flags)  is the host flag array, in which !=0 indicates    *
- *                start of a segment.                           *
- * h_out      is the output hostarray                           *
- *                                                              *
- * OP         class denotes the associative binary operator     *
- *                and should have an implementation similar to  *
- *                `class Add' in ScanUtil.cu, i.e., exporting   *
- *                `identity' and `apply' functions.             *
- * T          denotes the type on which OP operates,            *
- *                e.g., float or int.                           *
- */
-template<class OP, class T>
-void scanInc_gpu(  const unsigned long size, 
-                   T*                  h_in,  // host
-                   T*                  h_out  // host
-) {
-    const unsigned int block_size = BLOCK_SIZE;
-
-    // allocate gpu mem
-    T *d_in, *d_out;
-    cudaMalloc((void**)&d_in , size*sizeof(T));
-    cudaMalloc((void**)&d_out, size*sizeof(T));
-    
-    // copy input from host mem to device mem
-    cudaMemcpy( d_in, h_in, size*sizeof(T), cudaMemcpyHostToDevice);
-    
-    // call gpu scanInc
-    scanInc(block_size, size, d_in, d_out);
-    
-    // copy result back to host mem
-    cudaMemcpy( h_out, d_out, size*sizeof(T), cudaMemcpyDeviceToHost);
-    
-    // free dev mem
-    cudaFree(d_in );
-    cudaFree(d_out);
-
-}
-
-// SEGMENTED VERSION                                         //
-template<class OP, class T>
-void sgmScanInc_gpu( const unsigned long size,
-                     T*                  h_in,    // host
-                     int*                h_flags, // host
-                     T*                  h_out    // host
-) {
-    const unsigned int block_size = BLOCK_SIZE;
-
-    // allocate gpu mem
-    T *d_in, *d_out;
-    int *d_flags;
-    cudaMalloc((void**)&d_in , size*sizeof(T));
-    cudaMalloc((void**)&d_out, size*sizeof(T));
-    cudaMalloc((void**)&d_flags, size*sizeof(int));
-    
-    // copy input from host mem to device mem
-    cudaMemcpy( d_in, h_in, size*sizeof(T), cudaMemcpyHostToDevice);
-    cudaMemcpy( d_flags, h_flags, size*sizeof(int), cudaMemcpyHostToDevice);
-    
-    // call gpu scanInc
-    segmScanInc(block_size, size, d_in, d_flags, d_out);
-    
-    // copy result back to host mem
-    cudaMemcpy( h_out, d_out, size*sizeof(T), cudaMemcpyDeviceToHost);
-    
-    // free dev mem
-    cudaFree(d_in );
-    cudaFree(d_out);
-    cudaFree(d_flags);
-
-}
-
-
-
-
-/** MAXIMUM SEGMENT SUM                               *
- *                                                    *
- *  d_size      is total length of input array          *
- *  h_in      input array in which MSS is to be found *
- *                                                    *
- */
-int maxSegmentSum_gpu( const unsigned int d_size,  
-                       int*               h_in   // host 
-) {
-    const unsigned int block_size = BLOCK_SIZE;
-
-    // allocate gpu mem
-    int *d_in, res;
-    cudaMalloc((void**)&d_in, d_size*sizeof(int));
-    
-    // copy input from host mem to device mem
-    cudaMemcpy( d_in, h_in, d_size*sizeof(int), cudaMemcpyHostToDevice);
-    
-    // call gpu mss result is returned directly
-    res = maxSegmentSum( block_size, d_size, d_in);
-    
-    // free dev mem
-    cudaFree(d_in );
-
-    return res;
-}
-
-
-/** SPARSE MATRIX VECTOR MULTIPLICATION                       *
- *                                                            *
- *  size       total number of entries in matrix              *
- *  h_flags    pointer to host array containing row-flags     *
- *  h_mat_idx  ptr to host array containing column-idxs       *
- *  h_mat_val  ptr to host array containing value in matrix   *
- *  h_vec_val  ptr to host array containing vector values     *
- *  out_size   number of rows in matrix (size of out array)   *
- *  h_out      ptr to host array in which result is outputted *
- */
-void spMatVecMult_gpu( const unsigned int size,     
-                       int*               h_flags,   // host
-                       int*               h_mat_idx, // host
-                       float*             h_mat_val, // host
-                       float*             h_vec_val, // host
-		       const unsigned int out_size,  
-                       float*             h_out      // host
-) {  
-    const unsigned int block_size = BLOCK_SIZE;
-
-    // allocate gpu mem
-    int *d_flags, *d_mat_idx;
-    float *d_mat_val, *d_vec_val, *d_out;
-    
-    cudaMalloc((void**)&d_flags,   size*sizeof(int));
-    cudaMalloc((void**)&d_mat_idx, size*sizeof(int));
-    cudaMalloc((void**)&d_mat_val, size*sizeof(float));
-    cudaMalloc((void**)&d_vec_val, size*sizeof(float));
-    cudaMalloc((void**)&d_out,     out_size*sizeof(float));
-    
-    // copy input from host mem to device mem
-    cudaMemcpy( d_flags,   h_flags,   size*sizeof(int), cudaMemcpyHostToDevice);
-    cudaMemcpy( d_mat_idx, h_mat_idx, size*sizeof(int), cudaMemcpyHostToDevice);
-    cudaMemcpy( d_mat_val, h_mat_val, size*sizeof(float), cudaMemcpyHostToDevice);
-    cudaMemcpy( d_vec_val, h_vec_val, size*sizeof(float), cudaMemcpyHostToDevice);
-    
-    // call gpu sparse Matrix-Vector multiplication function
-    spMatVecMult(block_size, size, d_flags, d_mat_idx, d_mat_val, d_vec_val, d_out);
-    
-    // copy result back to host mem
-    cudaMemcpy( h_out, d_out, out_size*sizeof(float), cudaMemcpyDeviceToHost);
-    
-    // free dev mem
-    cudaFree(d_flags);
-    cudaFree(d_mat_idx);
-    cudaFree(d_mat_val);
-    cudaFree(d_vec_val);
-    cudaFree(d_out);
-
-}
-
-
-
-
 
 
 
@@ -575,21 +402,6 @@ mvalidate(const unsigned int cols, const unsigned int rows, T* a, T* b, bool ver
         printf("Matrix validate log end\n");
     }
     return success;
-}
-
-/** ARRAY SUMMATION                                               *
- * calculates the sum of the following *size* numbers in array    *
- *                                                                *
- * size    is the number of elements to be added                  *
- * arr     array to be summarized                                 *
- *                                                                *
- */
-template<class T> T sum(const unsigned int size, T* arr){
-    T acc = 0;
-    for (int i=0 ; i <size; i++) {
-        acc += arr[i];
-    }
-    return acc;
 }
 
 
