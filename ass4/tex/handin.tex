@@ -1,0 +1,176 @@
+\documentclass[a4paper,10pt]{article}
+\usepackage[a4paper, total={210mm,297mm}, left=20mm, right=20mm, top=20mm, bottom=20mm]{geometry}
+\usepackage[utf8]{inputenc}
+\usepackage{amsmath}
+\usepackage{parskip}
+\renewcommand\thesection{\arabic{section}}
+\renewcommand\thesubsection{\arabic{section}.\alph{subsection}}
+\renewcommand\thesubsubsection{\arabic{section}.\alph{subsection}.\roman{subsubsection}}
+
+%opening
+\title{Assignment 4 \\ Cache coherence protocols and Interconnect networks \\ Programming Massively Parallel Hardware }
+\author{Mads Thoudahl /qmh332}
+
+\begin{document}
+
+\maketitle
+\section{MSI / MESI performance gains}
+
+\begin{table}[h]
+  \centering
+  \begin{tabular}{rccccc}
+    Access & Action & Bus & State & Traffic [Bytes] & Time [cycles] \\ \hline
+     1 & R1/X & PrRd / BusRd & 1I $\rightarrow$ 1S  & 6+32 & 40 \\
+     2 & W1/X & PrWr / BusUpgr & 1S $\rightarrow$ 1M & 10 & 10 \\
+     3 & W1/X & PrWr / - & 1M $\rightarrow$ 1M & 0 & 1 \\
+
+     4 & R2/X & PrRd / BusRd & 2I $\rightarrow$ 2S  & 6+32 & 40 \\
+       &      & BusRd / Flush & 1M $\rightarrow$ 1S & - & - \\
+     5 & W2/X & PrWr / BusUpgr & 2S $\rightarrow$ 2M & 10 & 10 \\
+       &      & BusRdX / - & 1S $\rightarrow$ 1I & - & - \\
+     6 & W2/X & PrWr / - & 2M $\rightarrow$ 2M & 0 & 1 \\
+
+     7 & R3/X & PrRd / BusRd & 3I $\rightarrow$ 3S  & 6+32 & 40 \\
+       &      & BusRd / Flush & 2M $\rightarrow$ 2S & - & - \\
+     8 & W3/X & PrWr / BusUpgr & 3S $\rightarrow$ 3M & 10 & 10 \\
+       &      & BusRdX / - & 2S $\rightarrow$ 2I & - & - \\
+     9 & W3/X & PrWr / - & 3M $\rightarrow$ 3M & 0 & 1 \\
+
+    10 & R4/X & PrRd / BusRd & 4I $\rightarrow$ 4S  & 6+32 & 40 \\
+       &      & BusRd / Flush & 3M $\rightarrow$ 3S & - & - \\
+    11 & W4/X & PrWr / BusUpgr & 4S $\rightarrow$ 4M & 10 & 10 \\
+       &      & BusRdX / - & 3S $\rightarrow$ 3I & - & - \\
+    12 & W4/X & PrWr / - & 4M $\rightarrow$ 4M & 0 & 1 \\ \hline
+
+    sum & & & & 192 & 204 \\ \hline \hline
+  \end{tabular}
+  \caption{Access sequence 1: MSI, performance table}
+  \label{tab:msi_1}
+\end{table}
+
+\begin{table}[h]
+  \centering
+  \begin{tabular}{rccccc}
+    Access & Action & Bus & State & Traffic [Bytes] & Time [cycles] \\ \hline
+     1 & R1/X & PrRd / BusRd & 1I $\rightarrow$ 1E  & 6+32 & 40 \\
+     2 & W1/X & PrWr / - & 1E $\rightarrow$ 1M & 0 & 1 \\
+     3 & W1/X & PrWr / - & 1M $\rightarrow$ 1M & 0 & 1 \\
+
+     4 & R2/X & PrRd / BusRd(S) & 2I $\rightarrow$ 2S  & 6+32 & 40 \\
+       &      & BusRd / Flush & 1M $\rightarrow$ 1S & - & - \\
+
+     5 & W2/X & PrWr / BusRdX & 2S $\rightarrow$ 2M & 10 & 10 \\
+       &      & BusRdX / - & 1S $\rightarrow$ 1I & - & - \\
+
+     6 & W2/X & PrWr / - & 2M $\rightarrow$ 2M & 0 & 1 \\
+
+     7 & R3/X & PrRd / BusRd(S) & 3I $\rightarrow$ 3S  & 6+32 & 40 \\
+       &      & BusRd / Flush & 2M $\rightarrow$ 2S & - & - \\
+     8 & W3/X & PrWr / BusRdX & 3S $\rightarrow$ 3M & 10 & 10 \\
+       &      & BusRdX / - & 2S $\rightarrow$ 2I & - & - \\
+     9 & W3/X & PrWr / - & 3M $\rightarrow$ 3M & - & 1 \\
+
+    10 & R4/X & PrRd / BusRd(S) & 4I $\rightarrow$ 4S  & 6+32 & 40 \\
+       &      & BusRd / Flush & 3M $\rightarrow$ 3S & - & - \\
+    11 & W4/X & PrWr / BusRdX & 4S $\rightarrow$ 4M & 10 & 10 \\
+       &      & BusRdX / - & 3S $\rightarrow$ 3I & - & - \\
+    12 & W4/X & PrWr / - & 4M $\rightarrow$ 4M & - & 1 \\ \hline
+
+    sum & & & & 182 & 195 \\ \hline \hline
+  \end{tabular}
+  \caption{Access sequence 1: MESI, performance table}
+  \label{tab:mesi_1}
+\end{table}
+
+\subsection{Compare cycles taken to execute access sequence}
+As seen from the MSI table \ref{tab:msi_1} the cycles taken to complete is 205.
+The MESI table \ref{tab:mesi_1} reveals a small improvement at 195 cycles.
+
+\subsection{Compare traffic generated in access sequence}
+The traffic is also slightly better in the MESI model as we transfer 182 bytes on the bus compared to 192 in the MSI model.
+
+
+\newpage
+
+\section{Migratory sharing detection}
+
+\begin{table}[h!]
+  \centering
+  \begin{tabular}{rccccc}
+    Access & Action & Bus & State & Traffic [Bytes] & Time [cycles] \\ \hline
+     1 & R1/X & PrRd / BusRd & 1I $\rightarrow$ 1E  & 6+32 & 40 \\
+     2 & W1/X & PrWr / BusUpgr & 1E $\rightarrow$ 1M & 1 & 10 \\
+
+     3 & R2/X & PrRd / BusRd & 2I $\rightarrow$ 2S  & 6+32 & 40 \\
+       &      & BusRd / Flush & 1M $\rightarrow$ 1S & - & - \\
+     4 & W2/X & PrWr / BusUpgr & 2S $\rightarrow$ 2M & 10 & 10 \\
+       &      & BusRdX / - & 1S $\rightarrow$ 1I & - & - \\
+
+     5 & R3/X & PrRd / BusRd & 3I $\rightarrow$ 3S  & 6+32 & 40 \\
+       &      & BusRd / Flush & 2M $\rightarrow$ 2S & - & - \\
+     6 & W3/X & PrWr / BusUpgr & 3S $\rightarrow$ 3M & 10 & 10 \\
+       &      & BusRdX / - & 2S $\rightarrow$ 2I & - & - \\
+
+     7 & R4/X & PrRd / BusRd & 4I $\rightarrow$ 4S  & 6+32 & 40 \\
+       &      & BusRd / Flush & 3M $\rightarrow$ 3S & - & - \\
+     8 & W4/X & PrWr / BusUpgr & 4S $\rightarrow$ 4M & 10 & 10 \\
+       &      & BusRdX / - & 3S $\rightarrow$ 3I & - & - \\ \hline
+
+    sum & & & & 192 & 200 \\ \hline \hline
+  \end{tabular}
+  \caption{Access sequence 2: MESI, performance table}
+  \label{tab:mesi_2}
+\end{table}
+
+
+\begin{table}[h!]
+  \centering
+  \begin{tabular}{rccccc}
+    Access & Action & Bus & State & Traffic [Bytes] & Time [cycles] \\ \hline
+     1 & R1/X & PrRd / BusRd & 1I $\rightarrow$ 1E  & 6+32 & 40 \\
+     2 & W1/X & PrWr / BusUpgr & 1E $\rightarrow$ 1M & 1 & 10 \\
+
+     3 & R2/X & PrRd / BusRd & 2I $\rightarrow$ 2S  & 6+32 & 40 \\
+       &      & BusRd / Flush & 1M $\rightarrow$ 1S & - & - \\
+       & ---- & --- MIGRATORY  & SHARING --- & --- DETEC & TED --- \\
+     4 & W2/X & PrWr / BusUpgr & 2S $\rightarrow$ 2M & 10 & 10 \\
+       &      & BusRdX / - & 1S $\rightarrow$ 1I & - & - \\
+
+     5 & R3/X & PrRd / BusRdX & 3I $\rightarrow$ 3E  & 6+32 &  40 \\
+       &      & BusRdX / Flush & 2M $\rightarrow$ 2I & - & - \\
+     6 & W3/X & PrWr / BusUpgr & 3E $\rightarrow$ 3M & 1 & 1 \\
+
+     7 & R4/X & PrRd / BusRdX & 4I $\rightarrow$ 4E  & 6+32 & 40 \\
+       &      & BusRdX / Flush & 3M $\rightarrow$ 3I & - & - \\
+     8 & W4/X & PrWr / BusUpgr & 4S $\rightarrow$ 4M & 1 & 1 \\ \hline
+
+    sum & & & & 165 & 182 \\ \hline \hline
+  \end{tabular}
+  \caption{Access sequence 2: MESI w/migratory sharing, performance table}
+  \label{tab:mesi_2_migration}
+\end{table}
+
+\subsection{Compare cycles taken to execute access sequence}
+As seen from the MESI \ref{tab:mesi_2} table the cycles taken to complete is 200.
+The MESI w/migratory sharing \ref{tab:mesi_2_migration} table reveals a 182 cycles. 9\% fewer clock cycles used.
+
+\subsection{Compare traffic generated in access sequence}
+As seen from the MESI \ref{tab:mesi_2} table the cycles taken to complete is 192.
+The MESI w/migratory sharing \ref{tab:mesi_2_migration} table reveals 165 bytes of traffic. 14 \% less traffic generated.
+
+
+\newpage
+
+\section{Matrix transposition CPU} implementation reduced from hostlib.cu.h:
+\newpage
+\section{Dense matrix multiplication}
+Looking to the output of the program underneath, we see that the calculation of the matrix multiplication on two 1280x1280 matrices takes around 11.7 seconds to perform for the CPU.
+This is performed so much faster by the optimal GPU version timed at 11.4 milliseconds, which yet improves the naïve GPU implementation by a 2.5x speedup.
+
+Calculating the number of floating point operations per second, in Giga ($10^9$) Flop per second or just Gflop/s.
+We see that the optimized implementation scores an amazing 367.98 Gflops/s, 3 orders of magnitude more than the serial implementation.
+
+in the following subsections we display the techniques and implementations used to achieve this performance.
+
+
+\end{document}
